@@ -9,7 +9,7 @@
 namespace inference {
 
 // image: 1x3xHxW, mask: 1x1xHxW (float32), NCHW
-    std::vector<float> classify(
+    std::vector<float> infer(
             SessionCache* session_cache,
             float* image_data,
             float* mask_data,          // <-- eklendi

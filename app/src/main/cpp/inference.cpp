@@ -75,7 +75,7 @@ namespace {
 
 namespace inference {
 
-    std::vector<float> classify(SessionCache *session_cache,
+    std::vector<float> infer(SessionCache *session_cache,
                                 float *image_data,
                                 float *mask_data,             // <-- eklendi
                                 int64_t batch_size,

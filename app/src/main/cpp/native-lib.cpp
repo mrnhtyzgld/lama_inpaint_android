@@ -54,8 +54,8 @@ Java_com_example_cpponnxrunner_MainActivity_performInference(
     jfloat* msk_ptr  = env->GetFloatArrayElements(mask_buffer,  &isCopyMsk);
 
     // Inference: std::vector<float> döner
-    // Not: classify imzan; (session_cache, image_data, mask_data, batch, image_channels, rows, cols)
-    std::vector<float> out = inference::classify(
+    // Not: infer imzan; (session_cache, image_data, mask_data, batch, image_channels, rows, cols)
+    std::vector<float> out = inference::infer(
             session_cache,
             reinterpret_cast<float*>(img_ptr),
             reinterpret_cast<float*>(msk_ptr),
