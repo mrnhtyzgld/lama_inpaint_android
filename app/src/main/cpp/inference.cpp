@@ -1,10 +1,10 @@
 #include "inference.h"
-#include <cassert>
+#include "InferenceRunner.h"
 #include "onnxruntime_cxx_api.h"
+#include <cassert>
 #include <android/log.h>
 #include <vector>
 #include <cstdint>
-#include "onnxruntime_cxx_api.h"
 #include <stdexcept>
 
 namespace {

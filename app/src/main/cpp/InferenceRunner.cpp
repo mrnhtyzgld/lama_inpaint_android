@@ -1,10 +1,7 @@
-#include "InferenceRunner.hpp"
+#include "InferenceRunner.h"
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
-
-// hataları hallet
-// memory leak var mı bak
 
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
@@ -33,8 +30,8 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
             mat_mask, 1.f / 255.f, {image_width_, image_height_}, cv::Scalar(), /*swapRB*/
             false, /*crop*/ false, CV_32F);
 
-    float *image_data = reinterpret_cast<float *>(mat_image.data);
-    float *mask_data = reinterpret_cast<float *>(mat_mask.data);
+    auto *image_data = reinterpret_cast<float *>(mat_image.data);
+    auto *mask_data = reinterpret_cast<float *>(mat_mask.data);
     if (mat_image.dims != 4 || mat_mask.dims != 4)
         throw std::runtime_error("blob must be 4D (NCHW).");
 
@@ -96,7 +93,7 @@ cv::Mat InferenceRunner::ort_output_to_mat(const Ort::Value &out) {
     cv::Mat image_u8; // (CV_8U, 1 or 3 channel)
     const size_t plane = static_cast<size_t>(H) * static_cast<size_t>(W);
 
-    const float *ptr = out.GetTensorData<float>();
+    const auto *ptr = out.GetTensorData<float>();
 
     // CHW -> HWC (float)
     if (C == 1) {
@@ -126,7 +123,7 @@ cv::Mat InferenceRunner::ort_output_to_mat(const Ort::Value &out) {
 }
 
 void InferenceRunner::start_environment_() {
-    // Get the first provider, doesnt set it
+    // Get the first provider, TODO doesnt set it
     auto provider = Ort::GetAvailableProviders().front();
 
     // Setting up ONNX environment
@@ -144,8 +141,4 @@ void InferenceRunner::start_environment_() {
     const ORTCHAR_T *kModelPath = model_path_.c_str();
     session_ = Ort::Session(env_, kModelPath, sessionOptions_);
 
-    // Allocate memory for inputs
-    Ort::MemoryInfo memory_info{nullptr};
-
-    memory_info = std::move(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault));
 }
