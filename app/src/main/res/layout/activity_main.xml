@@ -18,21 +18,14 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <LinearLayout
-            android:id="@+id/train_mode_layout"
+        <Button
+            android:id="@+id/infer_button"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/infer_button"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/inference"
-                android:textAllCaps="false" />
-        </LinearLayout>
+            android:orientation="horizontal"
+            android:text="@string/inference"
+            android:textAllCaps="false" />
 
         <LinearLayout
             android:id="@+id/image_layout"
@@ -45,19 +38,18 @@
                 android:layout_width="0dp"
                 android:layout_height="400dp"
                 android:layout_weight="1"
-                android:contentDescription="@string/input_image_for_inference_scenarios"
                 android:adjustViewBounds="true"
+                android:contentDescription="@string/input_image_for_inference_scenarios"
                 android:scaleType="fitCenter"
                 tools:srcCompat="@tools:sample/avatars" />
 
-            <!-- ÇIKTI ÖNİZLEME İÇİN YENİ GÖRÜNÜM -->
             <ImageView
                 android:id="@+id/output_image"
                 android:layout_width="0dp"
                 android:layout_height="400dp"
                 android:layout_weight="1"
-                android:contentDescription="@string/output_image"
                 android:adjustViewBounds="true"
+                android:contentDescription="@string/output_image"
                 android:scaleType="fitCenter"
                 tools:srcCompat="@tools:sample/avatars" />
         </LinearLayout>
@@ -80,45 +72,6 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:text="Hello World!" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/class_layout"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/classA"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/a" />
-
-            <Button
-                android:id="@+id/classB"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/b" />
-
-            <Button
-                android:id="@+id/classX"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/x" />
-
-            <Button
-                android:id="@+id/classY"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/y" />
         </LinearLayout>
 
         <LinearLayout
@@ -151,34 +104,6 @@
 
             <Space
                 android:id="@+id/camera_setting_after_space"
-                android:layout_width="20dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="0" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/custom_classes_setting_layout"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="horizontal">
-
-            <Space
-                android:id="@+id/custom_class_setting_before_space"
-                android:layout_width="20dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="0" />
-
-            <Switch
-                android:id="@+id/custom_class_setting"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:checked="true"
-                android:minHeight="48dp"
-                android:text="@string/custom_classes" />
-
-            <Space
-                android:id="@+id/custom_class_setting_after_space"
                 android:layout_width="20dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0" />

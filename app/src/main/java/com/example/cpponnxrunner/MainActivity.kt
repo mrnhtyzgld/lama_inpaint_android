@@ -26,8 +26,8 @@ class MainActivity : AppCompatActivity() {
 
     private val MODEL_ASSET_PATH = "lama_fp32.onnx"
     private val IMAGE_INPUT_PATH = "images/input_image.png"
-    private val MASK_INPUT_PATH  = "images/dilated_mask.png"
-    private val OUTPUT_PATH      = "output/output_image.png"
+    private val MASK_INPUT_PATH = "images/dilated_mask.png"
+    private val OUTPUT_PATH = "output/output_image.png"
 
     private lateinit var binding: ActivityMainBinding
     private var ort_session: Long = -1
@@ -35,16 +35,6 @@ class MainActivity : AppCompatActivity() {
     private val CAPTURE_IMAGE = 2000
     private val CAMERA_PERMISSION_CODE = 8
 
-    // Mevcut UI’daki custom-class switch vs. dokunmuyoruz.
-    private var samplesClassA = 0
-    private var nameClassA: String = "A"
-    private var samplesClassB = 0
-    private var nameClassB: String = "B"
-    private var samplesClassX = 0
-    private var nameClassX: String = "X"
-    private var samplesClassY = 0
-    private var nameClassY: String = "Y"
-    private val prepackedDefaultLabels: Array<String> = arrayOf("dog", "cat", "elephant", "cow")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,24 +72,6 @@ class MainActivity : AppCompatActivity() {
             intent.action = Intent.ACTION_GET_CONTENT
             startActivityForResult(Intent.createChooser(intent, "Select Picture"), PICK_IMAGE)
         }
-    }
-
-    private fun disableButtons() {
-        binding.classA.isEnabled = false
-        binding.classB.isEnabled = false
-        binding.classX.isEnabled = false
-        binding.classY.isEnabled = false
-        binding.inferButton.isEnabled = false
-    }
-
-    private fun enableButtons() {
-        if (binding.customClassSetting.isChecked) {
-            binding.classA.isEnabled = true
-            binding.classB.isEnabled = true
-            binding.classX.isEnabled = true
-            binding.classY.isEnabled = true
-        }
-        binding.inferButton.isEnabled = true
     }
 
     override fun onRequestPermissionsResult(
@@ -147,7 +119,11 @@ class MainActivity : AppCompatActivity() {
         // --- Image tensor (1x3xHxW, float32, NCHW) ---
         val imgData = FloatBuffer.allocate(batchSize * channels * width * height)
         imgData.rewind()
-        processImage(bitmapResized, imgData, 0) // mevcut fonksiyonunu kullanıyoruz (0..1 normalize ediyorsa öyle kalsın)
+        processImage(
+            bitmapResized,
+            imgData,
+            0
+        ) // mevcut fonksiyonunu kullanıyoruz (0..1 normalize ediyorsa öyle kalsın)
         imgData.rewind()
 
         // --- Mask tensor (1x1xHxW, float32, NCHW) ---
