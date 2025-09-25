@@ -39,7 +39,7 @@ namespace {
         };
 
         if (C == 1) {
-            // CHW (tek kanal) -> HWC RGB'ye genişlet
+            // CHW (single channel) -> expand to HWC RGB
             for (int64_t y = 0; y < H; ++y) {
                 for (int64_t x = 0; x < W; ++x) {
                     size_t src = static_cast<size_t>(y * W + x); // 0*H*W + y*W + x
@@ -77,31 +77,30 @@ namespace inference {
 
     std::vector<float> infer(SessionCache *session_cache,
                                 float *image_data,
-                                float *mask_data,             // <-- eklendi
+                                float *mask_data,
                                 int64_t batch_size,
                                 int64_t image_channels,
                                 int64_t image_rows,
                                 int64_t image_cols) {
-        // I/O isimleri modelinle uyumlu
+        // I/O names
         std::vector<const char *> input_names = {"image", "mask"};
         std::vector<const char *> output_names = {"output"};
 
-        const size_t input_count = input_names.size();   // 2
-        const size_t output_count = output_names.size();  // 1 (varsayım)
+        const size_t input_count = input_names.size();
+        const size_t output_count = output_names.size();
 
-        // Şekiller
+        // Data Shapes
         std::vector<int64_t> image_shape{batch_size, image_channels, image_rows,
                                          image_cols}; // 1x3xHxW
         std::vector<int64_t> mask_shape{batch_size, 1, image_rows, image_cols}; // 1x1xHxW
 
-        // Giriş tensörleri
+        // Input Tensors
         Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,
                                                                  OrtMemTypeDefault);
 
         std::vector<Ort::Value> input_values;
         input_values.reserve(2);
 
-        // Untyped CreateTensor: byte sayısı gerekir
         const size_t img_bytes = static_cast<size_t>(batch_size) *
                                  static_cast<size_t>(image_channels) *
                                  static_cast<size_t>(image_rows) *
@@ -122,17 +121,16 @@ namespace inference {
                 mask_shape.data(), mask_shape.size(),
                 ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT));
 
-        // Çıkış slotları
-        // Çalıştır: çıktıları dönüş değeri olarak al
+        // Outputs
         std::vector<Ort::Value> output_values =
                 session_cache->inference_session->Run(
-                        Ort::RunOptions{},                      // veya Ort::RunOptions()
+                        Ort::RunOptions{},                      // or Ort::RunOptions()
                         input_names.data(), input_values.data(), input_count,
-                        output_names.data(),                    // output adları
+                        output_names.data(),                    // output names
                         output_count
                 );
 
-        // Çıktıyı RGB8'e çevirip float [0..255] olarak döndür (mevcut yardımcıyı kullanıyoruz)
+        // Convert output to RGB8 and return as float [0..255] (use existing helper)
         std::vector<float> result;
         for (auto &s: output_values) {
             auto rgb = ort_output_to_buffer_rgb8(s);             // W*H*3 bytes

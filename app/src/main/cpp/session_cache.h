@@ -1,5 +1,3 @@
-
-
 #ifndef CPPONNXRUNNER_SESSION_CACHE_H
 #define CPPONNXRUNNER_SESSION_CACHE_H
 #include "onnxruntime_cxx_api.h"

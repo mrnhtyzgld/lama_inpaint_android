@@ -42,12 +42,12 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // --- Assets -> Cache kopyalama ---
-        // SessionCache, modeli cacheDir/inference.onnx bekliyor. O yüzden hedef adını özellikle 'inference.onnx' veriyoruz.
+        // --- Copy Assets -> Cache ---
+        // SessionCache expects the model at cacheDir/inference.onnx. Therefore, we explicitly set the destination name to 'inference.onnx'.
         copyAssetToCacheDir(MODEL_ASSET_PATH, "inference.onnx")     // => $cacheDir/inference.onnx
-        copyFileOrDir("images")                                     // => $cacheDir/images/* (mask ve örnek input için, istersen)
+        copyFileOrDir("images")                                     // => $cacheDir/images/* (for mask and sample input, if you want)
 
-        // Ort session oluştur (cache path veriliyor; model path'i SessionCache içinde sabitlenmiş)
+        // Create Ort session (cache path is provided; the model path is fixed inside SessionCache)
         ort_session = createSession("$cacheDir")
 
         val inferButton: Button = findViewById(R.id.infer_button)
@@ -106,13 +106,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // === img2img için giriş/çıkış boyutlarını sabitle (modeline göre güncellemek serbest) ===
+        // === For img2img, fix input/output sizes (feel free to update according to your model) ===
         val batchSize = 1
         val channels = 3
         val width = 512
         val height = 512
 
-        // --- Görüntüyü modele uygun boyuta getir ---
+        // --- Resize the image to fit the model ---
         val bitmapResized: Bitmap = processBitmap(srcBitMap)
         binding.inputImage.setImageBitmap(bitmapResized)
 
@@ -123,19 +123,19 @@ class MainActivity : AppCompatActivity() {
             bitmapResized,
             imgData,
             0
-        ) // mevcut fonksiyonunu kullanıyoruz (0..1 normalize ediyorsa öyle kalsın)
+        ) // use your existing function (keep as-is if it normalizes to 0..1)
         imgData.rewind()
 
         // --- Mask tensor (1x1xHxW, float32, NCHW) ---
-        // Maskeyi assets'ten al (SABİT PATH), modele uygun boyuta getir ve 0..1 aralığında doldur.
+        // Load the mask from assets (FIXED PATH), resize to the model size, and fill it in the 0..1 range.
         val maskBitmapSrc = loadBitmapFromAsset(MASK_INPUT_PATH)
         val maskBitmap = Bitmap.createScaledBitmap(maskBitmapSrc, width, height, true)
         val maskData = FloatBuffer.allocate(batchSize * 1 * width * height)
         maskData.rewind()
-        processMask(maskBitmap, maskData) // 1 kanal doldur
+        processMask(maskBitmap, maskData) // fill 1 channel
         maskData.rewind()
 
-        // --- JNI inference (img2img dönüşü: H*W*3 uzunlukta [0..255] float RGB interleaved) ---
+        // --- JNI inference (img2img returns: [0..255] float RGB interleaved of length H*W*3) ---
         val outRgbFloats: FloatArray = performInference(
             ort_session,
             imgData.array(),
@@ -146,14 +146,14 @@ class MainActivity : AppCompatActivity() {
             height
         )
 
-        // --- Çıktıyı Bitmap'e çevir ---
+        // --- Convert output to Bitmap ---
         val outBitmap = floatsToBitmapRGB8(outRgbFloats, width, height)
 
-        // --- İsteğe bağlı: cache'e kaydet ---
+        // --- Optionally: save to cache ---
         val savedPath = saveBitmapToCache(outBitmap, OUTPUT_PATH)
 
-        // --- UI gösterimi ---
-        // Layout'ta outputImage ImageView'in yoksa, statusMessage ile bilgi ver.
+        // --- UI display ---
+        // If there is no outputImage ImageView in the layout, inform via statusMessage.
         try {
             binding.outputImage.setImageBitmap(outBitmap)
             binding.statusMessage.text = "Output rendered."
@@ -186,7 +186,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // asset -> cache (hedefte farklı isim verebilirsin)
+    // asset -> cache (you may give a different name at the destination)
     private fun copyAssetToCacheDir(assetFileName: String, cacheFileName: String): String {
         mkCacheDir(cacheFileName)
         val f = File("$cacheDir/$cacheFileName")
@@ -209,7 +209,7 @@ class MainActivity : AppCompatActivity() {
         return f.path
     }
 
-    // Bir klasörü (ve altını) cache'e kopyalar (relatif yapıyı korur)
+    // Copies a folder (and its subcontents) to cache while preserving the relative structure
     private fun copyFileOrDir(path: String): String {
         val assetManager = assets
         try {
@@ -241,14 +241,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Maskeyi 1 kanallı float (NCHW: 1x1xHxW) olarak doldurur.
-    // Basitçe gri (R kanalı) alıp 0..1'e ölçekliyoruz. (Model ihtiyacına göre değiştirebilirsin.)
+    // Fills the mask as a single-channel float (NCHW: 1x1xHxW).
+    // Simply takes the grayscale (R channel) and scales it to 0..1. (Adjust according to your model's needs.)
     private fun processMask(maskBitmap: Bitmap, out: FloatBuffer) {
         val w = maskBitmap.width
         val h = maskBitmap.height
         val pixels = IntArray(w * h)
         maskBitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-        // NCHW sırada yaz: önce tüm HxW piksel (tek kanal)
+        // Write in NCHW order: first all HxW pixels (single channel)
         for (y in 0 until h) {
             for (x in 0 until w) {
                 val c = pixels[y * w + x]
@@ -259,7 +259,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Çıkan float RGB (0..255 interleaved) -> Bitmap
+    // Output float RGB (0..255 interleaved) -> Bitmap
     private fun floatsToBitmapRGB8(rgb: FloatArray, width: Int, height: Int): Bitmap {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val px = IntArray(width * height)
@@ -293,7 +293,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================
-    // JNI köprüleri
+    // JNI bridges
     // =========================
 
     external fun createSession(cacheDirPath: String): Long
@@ -316,14 +316,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================
-    // NOT: Aşağıdaki yardımcılar projende zaten var kabul edildi.
+    // NOTE: The helpers below are assumed to already exist in your project.
     // - bitmapFromUri(uri, contentResolver)
-    // - processBitmap(src: Bitmap) : Bitmap              // boyutlandırma / center-crop vb.
-    // - processImage(bitmap: Bitmap, buf: FloatBuffer, i:Int)  // 1x3xHxW NCHW float doldurur
-    // Bunlar projende yoksa, mevcutlarını kullan veya ekle.
+    // - processBitmap(src: Bitmap) : Bitmap              // resizing / center-crop etc.
+    // - processImage(bitmap: Bitmap, buf: FloatBuffer, i:Int)  // fills 1x3xHxW NCHW float
+    // If these are not present in your project, use your existing ones or add them.
     // =========================
 
-    // Eğer kendi URI loader'ını kullanmak istersen minimal örnek:
+    // If you want to use your own minimal URI loader:
     @Suppress("unused")
     private fun bitmapFromUriMinimal(uri: Uri): Bitmap {
         contentResolver.openInputStream(uri).use { input ->

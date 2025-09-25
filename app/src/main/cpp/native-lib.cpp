@@ -24,7 +24,7 @@ Java_com_example_cpponnxrunner_MainActivity_releaseSession(
 {
     auto *session_cache = reinterpret_cast<SessionCache *>(session);
     if (!session_cache) return;
-    delete session_cache->inference_session; // nullptr ise güvenli
+    delete session_cache->inference_session; // safe if nullptr
     session_cache->inference_session = nullptr;
     delete session_cache;
 }
@@ -40,7 +40,7 @@ Java_com_example_cpponnxrunner_MainActivity_performInference(
 {
     auto* session_cache = reinterpret_cast<SessionCache*>(session);
 
-    // inference_session yoksa oluştur
+    // inference_session create if not exists
     if (!session_cache->inference_session) {
         const char* model_path = session_cache->artifact_paths.inference_model_path.c_str();
         session_cache->inference_session = new Ort::Session(
@@ -48,13 +48,12 @@ Java_com_example_cpponnxrunner_MainActivity_performInference(
         );
     }
 
-    // Java FloatArray -> native pointer'lar
+    // Java FloatArray -> native pointers
     jboolean isCopyImg = JNI_FALSE, isCopyMsk = JNI_FALSE;
     jfloat* img_ptr  = env->GetFloatArrayElements(image_buffer, &isCopyImg);
     jfloat* msk_ptr  = env->GetFloatArrayElements(mask_buffer,  &isCopyMsk);
 
-    // Inference: std::vector<float> döner
-    // Not: infer imzan; (session_cache, image_data, mask_data, batch, image_channels, rows, cols)
+    // Inference returns std::vector<float>
     std::vector<float> out = inference::infer(
             session_cache,
             reinterpret_cast<float*>(img_ptr),
@@ -65,7 +64,7 @@ Java_com_example_cpponnxrunner_MainActivity_performInference(
             static_cast<int64_t>(width)         // cols (W)
     );
 
-    // Input'ları bırak
+    // Input
     env->ReleaseFloatArrayElements(image_buffer, img_ptr, JNI_ABORT);
     env->ReleaseFloatArrayElements(mask_buffer,  msk_ptr, JNI_ABORT);
 
