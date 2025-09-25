@@ -110,8 +110,8 @@ fun processBitmap(bitmap: Bitmap) : Bitmap {
     }
 
     // Resize the image to be channels x width x height as needed by the mobilenetv2 model
-    val width: Int = 224
-    val height: Int = 224
+    val width: Int = 512
+    val height: Int = 512
     val bitmapResized: Bitmap = Bitmap.createScaledBitmap(bitmapCropped, width, height, false)
 
     return bitmapResized
