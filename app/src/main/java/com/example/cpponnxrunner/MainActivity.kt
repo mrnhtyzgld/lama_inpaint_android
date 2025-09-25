@@ -39,6 +39,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.i("OpenCV", "OpenCV version = ${cvVersion()}")
+        Toast.makeText(this, "OpenCV: ${cvVersion()}", Toast.LENGTH_LONG).show()
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -330,4 +333,5 @@ class MainActivity : AppCompatActivity() {
             return BitmapFactory.decodeStream(input!!)
         }
     }
+    external fun cvVersion(): String
 }

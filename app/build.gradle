@@ -18,6 +18,7 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags '-std=c++17'
+                arguments "-DOpenCV_DIR=" + opencvsdk + "/sdk/native/jni"
             }
         }
 
@@ -38,7 +39,7 @@ android {
         targetCompatibility JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = '11'
+        jvmTarget = "11"
     }
     externalNativeBuild {
         cmake {
@@ -52,7 +53,7 @@ android {
 }
 
 dependencies {
-
+    implementation project(':opencv')
     implementation libs.androidx.core.ktx
     implementation libs.androidx.appcompat
     implementation libs.material
