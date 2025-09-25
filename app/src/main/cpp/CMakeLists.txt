@@ -32,8 +32,8 @@ add_library("cpponnxrunner" SHARED
         native-lib.cpp
         utils.cpp
         inference.cpp
+        InferenceRunner.cpp
 )
-
 
 add_library(onnxruntime SHARED IMPORTED)
 set_target_properties(onnxruntime PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/lib/libonnxruntime.so)
@@ -43,7 +43,6 @@ target_include_directories("cpponnxrunner" PRIVATE
 
 find_library(log-lib log)
 find_library(android-lib android)
-
 
 target_link_libraries(
         "cpponnxrunner"

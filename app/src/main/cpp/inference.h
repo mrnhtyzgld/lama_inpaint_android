@@ -12,7 +12,7 @@ namespace inference {
     std::vector<float> infer(
             SessionCache* session_cache,
             float* image_data,
-            float* mask_data,          // <-- eklendi
+            float* mask_data,
             int64_t batch_size,
             int64_t image_channels,    // 3
             int64_t image_rows,

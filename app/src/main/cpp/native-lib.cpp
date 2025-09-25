@@ -7,6 +7,7 @@
 #include "inference.h"
 #include "onnxruntime_cxx_api.h"
 #include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_example_cpponnxrunner_MainActivity_createSession(
