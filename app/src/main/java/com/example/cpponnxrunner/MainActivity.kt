@@ -22,7 +22,7 @@ import java.io.IOException
 class MainActivity : AppCompatActivity() {
 
     private val MODEL_ASSET_PATH = "lama_fp32.onnx"
-    private val SAMPLE_IMAGE_ASSET = "images/input_image_png.png"
+    private val SAMPLE_IMAGE_ASSET = "images/input_image.jpg"
     private val SAMPLE_MASK_ASSET = "images/dilated_mask.png"
     private val OUTPUT_IMAGE_PATH = "output/output_image.png"
 
@@ -107,7 +107,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 CAPTURE_IMAGE -> {
-                    // Kamera intent’i thumbnail döndürür; PNG’ye sıkıştırıp bayta çeviriyoruz
+                    // Camera intent returns a thumbnail; compress to PNG and convert to bytes
                     val bmp = data?.extras?.get("data") as? Bitmap ?: return
                     java.io.ByteArrayOutputStream().use { bos ->
                         bmp.compress(Bitmap.CompressFormat.PNG, 100, bos)
@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
                 binding.inputImage.setImageBitmap(inBitmap)
 
 
-                // Kamera kullanımında switch’i açık tut
+                // Keep the switch on when using the camera
                 if (requestCode == CAPTURE_IMAGE) {
                     binding.cameraSetting.isChecked = true
                 }
@@ -236,7 +236,7 @@ class MainActivity : AppCompatActivity() {
 
     external fun cvVersion(): String
 
-    /** assets/<assetPath> -> $cacheDir/<targetRelative> şeklinde kopyalar */
+    /** copies assets/<assetPath> to $cacheDir/<targetRelative> */
     private fun copyAssetToCache(targetRelative: String, assetPath: String) {
         ensureCacheParents(targetRelative)
         val outFile = File(cacheDir, targetRelative)
@@ -248,7 +248,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** $cacheDir/<relative> dosyasını (varsa üst klasörleri oluşturarak) yazar ve absolute path döner */
+    /** writes $cacheDir/<relative> (creating parent folders if needed) and returns the absolute path */
     private fun writeBytesToCache(relative: String, data: ByteArray): String {
         ensureCacheParents(relative)
         val outFile = File(cacheDir, relative)
@@ -256,7 +256,7 @@ class MainActivity : AppCompatActivity() {
         return outFile.absolutePath
     }
 
-    /** $cacheDir/<relative> için üst dizinleri yaratır */
+    /** creates parent directories for $cacheDir/<relative> */
     private fun ensureCacheParents(relative: String) {
         val parent = File(cacheDir, relative).parentFile
         if (parent != null && !parent.exists()) parent.mkdirs()

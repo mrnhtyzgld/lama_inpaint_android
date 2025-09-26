@@ -25,7 +25,7 @@ static std::vector<uint8_t> JByteArrayToVector(JNIEnv *env, jbyteArray arr) {
     const jsize len = env->GetArrayLength(arr);
     std::vector<uint8_t> out(static_cast<size_t>(len));
     if (len > 0) {
-        // jbyte (signed) -> uint8_t (unsigned) but bit düzeyi aynı; reinterpret güvenli
+        // jbyte (signed) -> uint8_t (unsigned) but bit-level is identical; reinterpret is safe
         env->GetByteArrayRegion(arr, 0, len, reinterpret_cast<jbyte *>(out.data()));
     }
     return out;
@@ -33,9 +33,9 @@ static std::vector<uint8_t> JByteArrayToVector(JNIEnv *env, jbyteArray arr) {
 static jbyteArray VectorToJByteArray(JNIEnv* env, const std::vector<uint8_t>& v) {
     if (!env) return nullptr;
 
-    // jsize sınırı kontrolü (32-bit JVM'lerde önemli)
+    // check jsize limit (important on 32-bit JVMs)
     if (v.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) {
-        return nullptr; // ya da burada Java exception fırlatabilirsiniz
+        return nullptr; // or you can throw a Java exception here
     }
 
     jsize len = static_cast<jsize>(v.size());
@@ -76,6 +76,6 @@ Java_com_example_cpponnxrunner_MainActivity_inferFromBytes(JNIEnv *env, jobject 
                                                            jbyteArray image_bytes,
                                                            jbyteArray mask_bytes) {
     return VectorToJByteArray(env, runner.runByteToByte(JByteArrayToVector(env, image_bytes),
-                                                   JByteArrayToVector(env, mask_bytes)));
+                                                        JByteArrayToVector(env, mask_bytes)));
 
 }
