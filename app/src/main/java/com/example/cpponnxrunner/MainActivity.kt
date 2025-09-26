@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
@@ -18,19 +17,16 @@ import com.example.cpponnxrunner.databinding.ActivityMainBinding
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.FloatBuffer
-import java.util.*
 
 
 class MainActivity : AppCompatActivity() {
 
     private val MODEL_ASSET_PATH = "lama_fp32.onnx"
-    private val IMAGE_INPUT_PATH = "images/input_image.png"
-    private val MASK_INPUT_PATH = "images/dilated_mask.png"
-    private val OUTPUT_PATH = "output/output_image.png"
+    private val SAMPLE_IMAGE_ASSET = "images/input_image_png.png"
+    private val SAMPLE_MASK_ASSET = "images/dilated_mask.png"
+    private val OUTPUT_IMAGE_PATH = "output/output_image.png"
 
     private lateinit var binding: ActivityMainBinding
-    private var ort_session: Long = -1
     private val PICK_IMAGE = 1000
     private val CAPTURE_IMAGE = 2000
     private val CAMERA_PERMISSION_CODE = 8
@@ -39,16 +35,21 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.i("OpenCV", "OpenCV version = ${cvVersion()}")
+        Toast.makeText(this, "OpenCV: ${cvVersion()}", Toast.LENGTH_LONG).show()
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // --- Copy Assets -> Cache ---
-        // SessionCache expects the model at cacheDir/inference.onnx. Therefore, we explicitly set the destination name to 'inference.onnx'.
         copyAssetToCacheDir(MODEL_ASSET_PATH, "inference.onnx")     // => $cacheDir/inference.onnx
         copyFileOrDir("images")                                     // => $cacheDir/images/* (for mask and sample input, if you want)
 
+        val copiedDir = File(cacheDir, "images")
+        Log.i("cpponnxrunner", "images dir=${copiedDir.absolutePath} list=${copiedDir.list()?.toList()}")
+
         // Create Ort session (cache path is provided; the model path is fixed inside SessionCache)
-        ort_session = createSession("$cacheDir")
+        createSession("$cacheDir/inference.onnx")
 
         val inferButton: Button = findViewById(R.id.infer_button)
         inferButton.setOnClickListener(onInferenceButtonClickedListener)
@@ -93,83 +94,71 @@ class MainActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-
         if (resultCode != RESULT_OK) return
 
-        lateinit var srcBitMap: Bitmap
-        if (requestCode == PICK_IMAGE) {
-            val uri = data?.data ?: return
-            srcBitMap = bitmapFromUri(uri, contentResolver)
-        } else if (requestCode == CAPTURE_IMAGE) {
-            srcBitMap = data?.extras?.get("data") as? Bitmap ?: return
-        } else {
-            return
-        }
-
-        // === For img2img, fix input/output sizes (feel free to update according to your model) ===
-        val batchSize = 1
-        val channels = 3
-        val width = 512
-        val height = 512
-
-        // --- Resize the image to fit the model ---
-        val bitmapResized: Bitmap = processBitmap(srcBitMap)
-        binding.inputImage.setImageBitmap(bitmapResized)
-
-        // --- Image tensor (1x3xHxW, float32, NCHW) ---
-        val imgData = FloatBuffer.allocate(batchSize * channels * width * height)
-        imgData.rewind()
-        processImage(
-            bitmapResized,
-            imgData,
-            0
-        ) // use your existing function (keep as-is if it normalizes to 0..1)
-        imgData.rewind()
-
-        // --- Mask tensor (1x1xHxW, float32, NCHW) ---
-        // Load the mask from assets (FIXED PATH), resize to the model size, and fill it in the 0..1 range.
-        val maskBitmapSrc = loadBitmapFromAsset(MASK_INPUT_PATH)
-        val maskBitmap = Bitmap.createScaledBitmap(maskBitmapSrc, width, height, true)
-        val maskData = FloatBuffer.allocate(batchSize * 1 * width * height)
-        maskData.rewind()
-        processMask(maskBitmap, maskData) // fill 1 channel
-        maskData.rewind()
-
-        // --- JNI inference (img2img returns: [0..255] float RGB interleaved of length H*W*3) ---
-        val outRgbFloats: FloatArray = performInference(
-            ort_session,
-            imgData.array(),
-            maskData.array(),
-            batchSize,
-            channels,
-            width,
-            height
-        )
-
-        // --- Convert output to Bitmap ---
-        val outBitmap = floatsToBitmapRGB8(outRgbFloats, width, height)
-
-        // --- Optionally: save to cache ---
-        val savedPath = saveBitmapToCache(outBitmap, OUTPUT_PATH)
-
-        // --- UI display ---
-        // If there is no outputImage ImageView in the layout, inform via statusMessage.
         try {
-            binding.outputImage.setImageBitmap(outBitmap)
-            binding.statusMessage.text = "Output rendered."
-        } catch (_: Throwable) {
-            binding.statusMessage.text = "Output saved to: $savedPath"
-        }
+            // 1) Input image -> ByteArray
+            val imageBytes: ByteArray = when (requestCode) {
+                PICK_IMAGE -> {
+                    val uri = data?.data ?: return
+                    contentResolver.openInputStream(uri).use { inp ->
+                        inp?.readBytes() ?: return
+                    }
+                }
 
-        if (requestCode == CAPTURE_IMAGE) {
-            binding.cameraSetting.isChecked = true
+                CAPTURE_IMAGE -> {
+                    // Kamera intent’i thumbnail döndürür; PNG’ye sıkıştırıp bayta çeviriyoruz
+                    val bmp = data?.extras?.get("data") as? Bitmap ?: return
+                    java.io.ByteArrayOutputStream().use { bos ->
+                        bmp.compress(Bitmap.CompressFormat.PNG, 100, bos)
+                        bos.toByteArray()
+                    }
+                }
+
+                else -> return
+            }
+            // bytes-based infer (assets -> ByteArray -> JNI -> bytes -> cache) ---
+            try {
+                val maskBytes: ByteArray = assets.open(SAMPLE_MASK_ASSET).use { it.readBytes() }
+                val imageBytes: ByteArray = assets.open(SAMPLE_IMAGE_ASSET).use { it.readBytes() }
+
+                val outBytes: ByteArray = inferFromBytes(imageBytes, maskBytes)
+                val outPath = writeBytesToCache(OUTPUT_IMAGE_PATH, outBytes)
+
+                Log.i("cpponnxrunner", "Output saved to: $outPath")
+                val outBitmap = BitmapFactory.decodeByteArray(outBytes, 0, outBytes.size)
+                try {
+                    binding.outputImage.setImageBitmap(outBitmap)
+                    binding.statusMessage.text = "Output rendered."
+                } catch (_: Throwable) {
+                    binding.statusMessage.text = "Output saved to: $outPath"
+                }
+                val inBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                binding.inputImage.setImageBitmap(inBitmap)
+
+
+                // Kamera kullanımında switch’i açık tut
+                if (requestCode == CAPTURE_IMAGE) {
+                    binding.cameraSetting.isChecked = true
+                }
+            } catch (t: Throwable) {
+                Log.e("cpponnxrunner", "bytes infer failed", t)
+            }
+
+
+        } catch (t: Throwable) {
+            Log.e("cpponnxrunner", "onActivityResult (bytes path) failed", t)
+            binding.statusMessage.text = "Error: ${t.message}"
         }
     }
 
+
     override fun onDestroy() {
         super.onDestroy()
-
-        releaseSession(ort_session)
+        try { // destroy stuff
+        } catch (t: Throwable) {
+            Log.w("cpponnxrunner", "releaseSession failed", t)
+        }
     }
 
     // =========================
@@ -230,84 +219,14 @@ class MainActivity : AppCompatActivity() {
         return "$cacheDir/$path"
     }
 
-    // =========================
-    // Helpers (bitmap <-> tensor)
-    // =========================
-
-    // assets/<relativePath> -> Bitmap
-    private fun loadBitmapFromAsset(relativePath: String): Bitmap {
-        assets.open(relativePath).use { inp ->
-            return BitmapFactory.decodeStream(inp)
-        }
-    }
-
-    // Fills the mask as a single-channel float (NCHW: 1x1xHxW).
-    // Simply takes the grayscale (R channel) and scales it to 0..1. (Adjust according to your model's needs.)
-    private fun processMask(maskBitmap: Bitmap, out: FloatBuffer) {
-        val w = maskBitmap.width
-        val h = maskBitmap.height
-        val pixels = IntArray(w * h)
-        maskBitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-        // Write in NCHW order: first all HxW pixels (single channel)
-        for (y in 0 until h) {
-            for (x in 0 until w) {
-                val c = pixels[y * w + x]
-                val r = (c shr 16) and 0xFF
-                // 0..255 -> 0..1
-                out.put(r / 255f)
-            }
-        }
-    }
-
-    // Output float RGB (0..255 interleaved) -> Bitmap
-    private fun floatsToBitmapRGB8(rgb: FloatArray, width: Int, height: Int): Bitmap {
-        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val px = IntArray(width * height)
-        var i = 0
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val r = clampToByte(rgb[i++])
-                val g = clampToByte(rgb[i++])
-                val b = clampToByte(rgb[i++])
-                px[y * width + x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-            }
-        }
-        bmp.setPixels(px, 0, width, 0, 0, width, height)
-        return bmp
-    }
-
-    private fun clampToByte(v: Float): Int {
-        var x = v
-        if (x < 0f) x = 0f
-        if (x > 255f) x = 255f
-        return (x + 0.5f).toInt()
-    }
-
-    private fun saveBitmapToCache(bitmap: Bitmap, relativePath: String): String {
-        mkCacheDir(relativePath)
-        val outFile = File("$cacheDir/$relativePath")
-        FileOutputStream(outFile).use { fos ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-        }
-        return outFile.absolutePath
-    }
 
     // =========================
     // JNI bridges
     // =========================
 
-    external fun createSession(cacheDirPath: String): Long
-    external fun releaseSession(session: Long)
-
-    external fun performInference(
-        session: Long,
-        imageBuffer: FloatArray,  // 1x3xHxW
-        maskBuffer: FloatArray,   // 1x1xHxW
-        batchSize: Int,
-        channels: Int,
-        frameCols: Int,
-        frameRows: Int
-    ): FloatArray
+    external fun createSession(cacheDir: String)
+    external fun inferFromBytes(image: ByteArray, mask: ByteArray): ByteArray
+    external fun releaseSession()
 
     companion object {
         init {
@@ -315,19 +234,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // =========================
-    // NOTE: The helpers below are assumed to already exist in your project.
-    // - bitmapFromUri(uri, contentResolver)
-    // - processBitmap(src: Bitmap) : Bitmap              // resizing / center-crop etc.
-    // - processImage(bitmap: Bitmap, buf: FloatBuffer, i:Int)  // fills 1x3xHxW NCHW float
-    // If these are not present in your project, use your existing ones or add them.
-    // =========================
+    external fun cvVersion(): String
 
-    // If you want to use your own minimal URI loader:
-    @Suppress("unused")
-    private fun bitmapFromUriMinimal(uri: Uri): Bitmap {
-        contentResolver.openInputStream(uri).use { input ->
-            return BitmapFactory.decodeStream(input!!)
+    /** assets/<assetPath> -> $cacheDir/<targetRelative> şeklinde kopyalar */
+    private fun copyAssetToCache(targetRelative: String, assetPath: String) {
+        ensureCacheParents(targetRelative)
+        val outFile = File(cacheDir, targetRelative)
+        if (outFile.exists()) return
+        assets.open(assetPath).use { inp ->
+            FileOutputStream(outFile).use { out ->
+                inp.copyTo(out)
+            }
         }
+    }
+
+    /** $cacheDir/<relative> dosyasını (varsa üst klasörleri oluşturarak) yazar ve absolute path döner */
+    private fun writeBytesToCache(relative: String, data: ByteArray): String {
+        ensureCacheParents(relative)
+        val outFile = File(cacheDir, relative)
+        FileOutputStream(outFile).use { it.write(data) }
+        return outFile.absolutePath
+    }
+
+    /** $cacheDir/<relative> için üst dizinleri yaratır */
+    private fun ensureCacheParents(relative: String) {
+        val parent = File(cacheDir, relative).parentFile
+        if (parent != null && !parent.exists()) parent.mkdirs()
     }
 }

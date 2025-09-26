@@ -11,6 +11,10 @@ cmake_minimum_required(VERSION 3.22.1)
 # build script scope).
 project("cpponnxrunner")
 
+
+set(OpenCV_DIR "C:/noWhiteSpace/packages/OpenCV-android-sdk/sdk/native/jni")
+find_package(OpenCV REQUIRED)
+
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
@@ -25,42 +29,23 @@ project("cpponnxrunner")
 # for GameActivity/NativeActivity derived applications, the same library name must be
 # used in the AndroidManifest.xml file.
 add_library("cpponnxrunner" SHARED
-        # List C/C++ source files with relative paths to this CMakeLists.txt.
         native-lib.cpp
         utils.cpp
-        inference.cpp
+        InferenceRunner.cpp
 )
-
 
 add_library(onnxruntime SHARED IMPORTED)
 set_target_properties(onnxruntime PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/lib/libonnxruntime.so)
-target_include_directories("cpponnxrunner" PRIVATE ${CMAKE_SOURCE_DIR}/include/onnxruntime)
+target_include_directories("cpponnxrunner" PRIVATE
+        ${CMAKE_SOURCE_DIR}/include/onnxruntime
+        ${OpenCV_INCLUDE_DIRS})
 
-find_library( # Sets the name of the path variable.
-        log-lib
+find_library(log-lib log)
+find_library(android-lib android)
 
-        # Specifies the name of the NDK library that
-        # you want CMake to locate.
-        log)
-find_library( # Sets the name of the path variable.
-        android-lib
-
-        # Specifies the name of the NDK library that
-        # you want CMake to locate.
-        android)
-
-# Specifies libraries CMake should link to your target library. You
-# can link libraries from various origins, such as libraries defined in this
-# build script, prebuilt third-party libraries, or Android system libraries.
-target_link_libraries("cpponnxrunner"
-        # List libraries link to the target library
-        android
-        log)
-
-target_link_libraries( # Specifies the target library.
-        ${CMAKE_PROJECT_NAME}
+target_link_libraries(
+        "cpponnxrunner"
         ${android-lib}
-        # Links the target library to the log library
-        # included in the NDK.
         ${log-lib}
-        onnxruntime)
+        onnxruntime
+        ${OpenCV_LIBS})
