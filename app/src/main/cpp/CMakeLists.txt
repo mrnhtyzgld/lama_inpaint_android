@@ -31,7 +31,6 @@ find_package(OpenCV REQUIRED)
 add_library("cpponnxrunner" SHARED
         native-lib.cpp
         utils.cpp
-        inference.cpp
         InferenceRunner.cpp
 )
 

@@ -6,7 +6,7 @@ namespace utils {
 
     std::string JString2String(JNIEnv *env, jstring jStr) {
         if (!jStr)
-            return std::string();
+            return {};
 
         const jclass stringClass = env->GetObjectClass(jStr);
         const jmethodID getBytes = env->GetMethodID(stringClass, "getBytes",

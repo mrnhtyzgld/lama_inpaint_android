@@ -2,11 +2,47 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
+#include <stdexcept>
 
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
     start_environment_();
+}
+
+void InferenceRunner::start_environment_() {
+    if (session_) return;
+    auto provider = Ort::GetAvailableProviders().front();
+
+    // Setting up ONNX environment
+    mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+
+    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "Default");
+
+    sessionOptions_.SetInterOpNumThreads(1);
+    sessionOptions_.SetIntraOpNumThreads(1);
+    // optimization will take time and memory during startup
+    sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+    // Start an ONNX Runtime session and create CPU memory info for input tensors.
+    // model path is const wchar_t*
+    const ORTCHAR_T *kModelPath = model_path_.c_str();
+    session_ = Ort::Session(env_, kModelPath, sessionOptions_);
+}
+
+std::vector<uint8_t> InferenceRunner::runByteToByte(const std::vector<uint8_t> &imageBytes,
+                                                    const std::vector<uint8_t> &maskBytes) {
+    if (imageBytes.empty())
+        throw std::invalid_argument("runByteToByte: imageBytes is empty");
+    if (maskBytes.empty())
+        throw std::invalid_argument("runByteToByte: maskBytes is empty");
+    cv::Mat image = decodeBytesToMat_(imageBytes, cv::IMREAD_COLOR);     // BGR, 3ch
+    cv::Mat mask = decodeBytesToMat_(maskBytes, cv::IMREAD_GRAYSCALE); // 1ch
+
+    auto outputMats = run(image, mask);
+    if (outputMats.empty()) throw std::runtime_error("no outputs from session");
+    //Take first input
+    return encodeMat_(outputMats[0], ".png", /*quality*/100);
 }
 
 std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &mask) {
@@ -20,14 +56,20 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
     if (mask.channels() != 1)
         throw std::runtime_error("mask must have 1 channel (grayscale)");
 
+    cv::Size target(image_width_, image_height_);
+    if (target.width <= 0 || target.height <= 0) {
+        // Güvenli geri dönüş: giriş boyutu
+        target = cv::Size(image.cols, image.rows);
+    }
+
     cv::Mat mat_image = image;
     cv::Mat mat_mask = mask;
 
     mat_image = cv::dnn::blobFromImage(
-            mat_image, 1.f / 255.f, {image_width_, image_height_}, cv::Scalar(), /*swapRB*/
+            mat_image, 1.f / 255.f, target, cv::Scalar(), /*swapRB*/
             true, /*crop*/ false, CV_32F);
     mat_mask = cv::dnn::blobFromImage(
-            mat_mask, 1.f / 255.f, {image_width_, image_height_}, cv::Scalar(), /*swapRB*/
+            mat_mask, 1.f / 255.f, target, cv::Scalar(), /*swapRB*/
             false, /*crop*/ false, CV_32F);
 
     auto *image_data = reinterpret_cast<float *>(mat_image.data);
@@ -45,23 +87,25 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
         input_names_c.push_back(s.c_str());
 
     std::vector<Ort::Value> inputs;
-    inputs.reserve(input_names_.size());
-    inputs[image_idx_] = Ort::Value::CreateTensor<float>(
-            mem_info_, image_data, (size_t) mat_image.total(), image_shape.data(),
-            image_shape.size());
-    inputs[mask_idx_] = Ort::Value::CreateTensor<float>(
-            mem_info_, mask_data, (size_t) mat_mask.total(), mask_shape.data(), mask_shape.size());
+    inputs.emplace_back(Ort::Value::CreateTensor<float>(
+            mem_info_, image_data, (size_t)mat_image.total(),
+            image_shape.data(), image_shape.size()));
+    inputs.emplace_back(Ort::Value::CreateTensor<float>(
+            mem_info_, mask_data, (size_t)mat_mask.total(),
+            mask_shape.data(), mask_shape.size()));
 
     // Outputs
     std::vector<const char *> output_names_c;
     for (auto &s: output_names_)
         output_names_c.push_back(s.c_str());
 
-    // Run
-    auto outputs = session_.Run(
-            Ort::RunOptions{nullptr},
-            input_names_c.data(), inputs.data(), inputs.size(),
-            output_names_c.data(), output_names_c.size());
+    // Outputs
+    auto outputs =
+            session_.Run(Ort::RunOptions{},
+                         input_names_c.data(), inputs.data(), inputs.size(),
+                         output_names_c.data(), output_names_c.size()
+            );
+
 
     // Process outputs
     std::vector<cv::Mat> output_mats(outputs.size());
@@ -69,6 +113,29 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
         output_mats[i] = ort_output_to_mat(outputs[i]);
 
     return output_mats;
+}
+
+cv::Mat InferenceRunner::decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags) {
+    if (bytes.empty()) throw std::runtime_error("decodeBytesToMat_: empty buffer");
+    cv::Mat buf(1, static_cast<int>(bytes.size()), CV_8U, const_cast<uint8_t *>(bytes.data()));
+    cv::Mat img = cv::imdecode(buf, flags);
+    if (img.empty()) throw std::runtime_error("imdecode failed");
+    return img;
+}
+
+std::vector<uint8_t>
+InferenceRunner::encodeMat_(const cv::Mat &img,
+                            const std::string &ext = ".png",
+                            int quality = 100) {
+    std::vector<uint8_t> out;
+    std::vector<int> params;
+    if (ext == ".jpg" || ext == ".jpeg") {
+        params = {cv::IMWRITE_JPEG_QUALITY, quality};
+    }
+    if (!cv::imencode(ext, img, out, params)) {
+        throw std::runtime_error("imencode failed");
+    }
+    return out;
 }
 
 void InferenceRunner::find_input_output_info_() {
@@ -120,25 +187,4 @@ cv::Mat InferenceRunner::ort_output_to_mat(const Ort::Value &out) {
     }
 
     return image_u8;
-}
-
-void InferenceRunner::start_environment_() {
-    // Get the first provider, TODO doesnt set it
-    auto provider = Ort::GetAvailableProviders().front();
-
-    // Setting up ONNX environment
-    mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
-
-    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "Default");
-
-    sessionOptions_.SetInterOpNumThreads(1);
-    sessionOptions_.SetIntraOpNumThreads(1);
-    // optimization will take time and memory during startup
-    sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-
-    // Start an ONNX Runtime session and create CPU memory info for input tensors.
-    // model path is const wchar_t*
-    const ORTCHAR_T *kModelPath = model_path_.c_str();
-    session_ = Ort::Session(env_, kModelPath, sessionOptions_);
-
 }

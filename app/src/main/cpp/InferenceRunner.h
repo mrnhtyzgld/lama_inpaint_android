@@ -7,8 +7,7 @@
 #include <opencv2/core.hpp>
 #include <onnxruntime_cxx_api.h>
 
-class InferenceRunner
-{
+class InferenceRunner {
 public:
     InferenceRunner() = default;
 
@@ -18,11 +17,20 @@ public:
     // Execute inference with an image and its mask; returns output matrices
     std::vector<cv::Mat> run(const cv::Mat &image, const cv::Mat &mask);
 
+    std::vector<uint8_t> runByteToByte(const std::vector<uint8_t> &imageBytes,
+                                       const std::vector<uint8_t> &maskBytes);
+
 private:
     // Helper functions
     void find_input_output_info_();
+
     cv::Mat ort_output_to_mat(const Ort::Value &out);
+
     void start_environment_();
+
+    cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
+
+    std::vector<uint8_t> encodeMat_(const cv::Mat &img, const std::string &ext, int quality);
 
     std::string model_path_;
     int image_idx_;

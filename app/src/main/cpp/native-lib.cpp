@@ -2,81 +2,80 @@
 #include <string>
 #include <vector>
 
-#include "session_cache.h"
 #include "utils.h"
-#include "inference.h"
 #include "onnxruntime_cxx_api.h"
+#include "InferenceRunner.h"
 #include <opencv2/core.hpp>
 #include <opencv2/dnn.hpp>
+#include <jni.h>
+#include <string>
 
-extern "C" JNIEXPORT jlong JNICALL
+InferenceRunner runner;
+
+inline std::string JStringToString(JNIEnv *env, jstring jstr) {
+    if (!jstr) return {};
+    const char *utf = env->GetStringUTFChars(jstr, nullptr); // JNI modified-UTF8
+    std::string out = utf ? std::string(utf) : std::string();
+    if (utf) env->ReleaseStringUTFChars(jstr, utf);
+    return out;
+}
+
+static std::vector<uint8_t> JByteArrayToVector(JNIEnv *env, jbyteArray arr) {
+    if (!arr) return {};
+    const jsize len = env->GetArrayLength(arr);
+    std::vector<uint8_t> out(static_cast<size_t>(len));
+    if (len > 0) {
+        // jbyte (signed) -> uint8_t (unsigned) but bit düzeyi aynı; reinterpret güvenli
+        env->GetByteArrayRegion(arr, 0, len, reinterpret_cast<jbyte *>(out.data()));
+    }
+    return out;
+}
+static jbyteArray VectorToJByteArray(JNIEnv* env, const std::vector<uint8_t>& v) {
+    if (!env) return nullptr;
+
+    // jsize sınırı kontrolü (32-bit JVM'lerde önemli)
+    if (v.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) {
+        return nullptr; // ya da burada Java exception fırlatabilirsiniz
+    }
+
+    jsize len = static_cast<jsize>(v.size());
+    jbyteArray arr = env->NewByteArray(len);
+    if (!arr) return nullptr;
+
+    if (len > 0) {
+        env->SetByteArrayRegion(arr, 0, len,
+                                reinterpret_cast<const jbyte*>(v.data()));
+    }
+    return arr;
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_example_cpponnxrunner_MainActivity_createSession(
         JNIEnv *env, jobject /* this */,
         jstring cache_dir_path) {
-    std::unique_ptr<SessionCache> session_cache =
-            std::make_unique<SessionCache>(utils::JString2String(env, cache_dir_path));
-    return reinterpret_cast<jlong>(session_cache.release());
+
+    runner.init_model(JStringToString(env, cache_dir_path));
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_cpponnxrunner_MainActivity_releaseSession(
-        JNIEnv * /*env*/, jobject /* this */,
-        jlong session) {
-    auto *session_cache = reinterpret_cast<SessionCache *>(session);
-    if (!session_cache) return;
-    delete session_cache->inference_session; // safe if nullptr
-    session_cache->inference_session = nullptr;
-    delete session_cache;
-}
-
-extern "C"
-JNIEXPORT jfloatArray JNICALL
-Java_com_example_cpponnxrunner_MainActivity_performInference(
-        JNIEnv *env, jobject /* this */,
-        jlong session,
-        jfloatArray image_buffer,   // 1x3xHxW
-        jfloatArray mask_buffer,    // 1x1xHxW
-        jint batch_size, jint channels, jint width, jint height) {
-    auto *session_cache = reinterpret_cast<SessionCache *>(session);
-
-    // inference_session create if not exists
-    if (!session_cache->inference_session) {
-        const char *model_path = session_cache->artifact_paths.inference_model_path.c_str();
-        session_cache->inference_session = new Ort::Session(
-                session_cache->ort_env, model_path, session_cache->session_options
-        );
-    }
-
-    // Java FloatArray -> native pointers
-    jboolean isCopyImg = JNI_FALSE, isCopyMsk = JNI_FALSE;
-    jfloat *img_ptr = env->GetFloatArrayElements(image_buffer, &isCopyImg);
-    jfloat *msk_ptr = env->GetFloatArrayElements(mask_buffer, &isCopyMsk);
-
-    // Inference returns std::vector<float>
-    std::vector<float> out = inference::infer(
-            session_cache,
-            reinterpret_cast<float *>(img_ptr),
-            reinterpret_cast<float *>(msk_ptr),
-            static_cast<int64_t>(batch_size),
-            static_cast<int64_t>(channels),     // image channels (=3)
-            static_cast<int64_t>(height),       // rows (H)
-            static_cast<int64_t>(width)         // cols (W)
-    );
-
-    // Input
-    env->ReleaseFloatArrayElements(image_buffer, img_ptr, JNI_ABORT);
-    env->ReleaseFloatArrayElements(mask_buffer, msk_ptr, JNI_ABORT);
-
-    // std::vector<float> -> jfloatArray
-    jfloatArray j_out = env->NewFloatArray(static_cast<jsize>(out.size()));
-    if (!j_out) return nullptr;
-    env->SetFloatArrayRegion(j_out, 0, static_cast<jsize>(out.size()), out.data());
-    return j_out;
+        JNIEnv * /*env*/, jobject /* this */) {
+    return;
 }
 
 extern "C"
 JNIEXPORT jstring JNICALL
-Java_com_example_cpponnxrunner_MainActivity_cvVersion(JNIEnv* env, jobject) {
+Java_com_example_cpponnxrunner_MainActivity_cvVersion(JNIEnv *env, jobject) {
     std::string ver = cv::getVersionString();
     return env->NewStringUTF(ver.c_str());
+}
+
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_com_example_cpponnxrunner_MainActivity_inferFromBytes(JNIEnv *env, jobject thiz,
+                                                           jbyteArray image_bytes,
+                                                           jbyteArray mask_bytes) {
+    return VectorToJByteArray(env, runner.runByteToByte(JByteArrayToVector(env, image_bytes),
+                                                   JByteArrayToVector(env, mask_bytes)));
+
 }
