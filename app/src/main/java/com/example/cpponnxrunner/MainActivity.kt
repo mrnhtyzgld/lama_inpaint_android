@@ -22,7 +22,7 @@ import java.io.IOException
 class MainActivity : AppCompatActivity() {
 
     private val MODEL_ASSET_PATH = "lama_fp32.onnx"
-    private val SAMPLE_IMAGE_ASSET = "images/input_image_png.png"
+    private val SAMPLE_IMAGE_ASSET = "images/input_image.jpg"
     private val SAMPLE_MASK_ASSET = "images/dilated_mask.png"
     private val OUTPUT_IMAGE_PATH = "output/output_image.png"
 
