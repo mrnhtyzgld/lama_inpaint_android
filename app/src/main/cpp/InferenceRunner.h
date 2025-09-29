@@ -26,11 +26,13 @@ private:
 
     cv::Mat ort_output_to_mat(const Ort::Value &out);
 
-    void start_environment_();
+    void start_environment_(int num_inter_threads, int num_intra_threads,
+                                             GraphOptimizationLevel optimization_level,
+                                             std::string provider_);
 
     cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
 
-    std::vector<uint8_t> encodeMat_(const cv::Mat &img, const std::string &ext, int quality);
+    std::vector<uint8_t> encodeMat_(const cv::Mat &img, const std::string &ext);
 
     std::string model_path_;
     int image_idx_;

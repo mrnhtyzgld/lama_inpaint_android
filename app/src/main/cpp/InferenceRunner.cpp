@@ -7,10 +7,18 @@
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
-    start_environment_();
+    start_environment_(1,
+                       1,
+                       GraphOptimizationLevel::ORT_ENABLE_ALL,
+                       "CPUExecutionProvider");
+
+
 }
 
-void InferenceRunner::start_environment_() {
+void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_threads,
+                                         GraphOptimizationLevel optimization_level,
+                                         std::string provider_ = "") {
+    // TODO make use of different providers
     if (session_) return;
     auto provider = Ort::GetAvailableProviders().front();
 
@@ -19,10 +27,10 @@ void InferenceRunner::start_environment_() {
 
     env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "Default");
 
-    sessionOptions_.SetInterOpNumThreads(1);
-    sessionOptions_.SetIntraOpNumThreads(1);
+    sessionOptions_.SetInterOpNumThreads(num_inter_threads);
+    sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
     // optimization will take time and memory during startup
-    sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    sessionOptions_.SetGraphOptimizationLevel(optimization_level);
 
     // Start an ONNX Runtime session and create CPU memory info for input tensors.
     // model path is const wchar_t*
@@ -42,7 +50,7 @@ std::vector<uint8_t> InferenceRunner::runByteToByte(const std::vector<uint8_t> &
     auto outputMats = run(image, mask);
     if (outputMats.empty()) throw std::runtime_error("no outputs from session");
     //Take first input
-    return encodeMat_(outputMats[0], ".png", /*quality*/100);
+    return encodeMat_(outputMats[0], ".png");
 }
 
 std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &mask) {
@@ -57,10 +65,6 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
         throw std::runtime_error("mask must have 1 channel (grayscale)");
 
     cv::Size target(image_width_, image_height_);
-    if (target.width <= 0 || target.height <= 0) {
-        // Güvenli geri dönüş: giriş boyutu
-        target = cv::Size(image.cols, image.rows);
-    }
 
     cv::Mat mat_image = image;
     cv::Mat mat_mask = mask;
@@ -88,10 +92,10 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
 
     std::vector<Ort::Value> inputs;
     inputs.emplace_back(Ort::Value::CreateTensor<float>(
-            mem_info_, image_data, (size_t)mat_image.total(),
+            mem_info_, image_data, (size_t) mat_image.total(),
             image_shape.data(), image_shape.size()));
     inputs.emplace_back(Ort::Value::CreateTensor<float>(
-            mem_info_, mask_data, (size_t)mat_mask.total(),
+            mem_info_, mask_data, (size_t) mat_mask.total(),
             mask_shape.data(), mask_shape.size()));
 
     // Outputs
@@ -124,13 +128,11 @@ cv::Mat InferenceRunner::decodeBytesToMat_(const std::vector<uint8_t> &bytes, in
 }
 
 std::vector<uint8_t>
-InferenceRunner::encodeMat_(const cv::Mat &img,
-                            const std::string &ext = ".png",
-                            int quality = 100) {
+InferenceRunner::encodeMat_(const cv::Mat &img, const std::string &ext = ".png") {
     std::vector<uint8_t> out;
     std::vector<int> params;
     if (ext == ".jpg" || ext == ".jpeg") {
-        params = {cv::IMWRITE_JPEG_QUALITY, quality};
+        params = {cv::IMWRITE_JPEG_QUALITY, 100};
     }
     if (!cv::imencode(ext, img, out, params)) {
         throw std::runtime_error("imencode failed");
