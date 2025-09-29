@@ -35,7 +35,10 @@ add_library("cpponnxrunner" SHARED
 )
 
 add_library(onnxruntime SHARED IMPORTED)
-set_target_properties(onnxruntime PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/lib/libonnxruntime.so)
+set_target_properties(onnxruntime PROPERTIES
+        IMPORTED_NO_SONAME TRUE
+        IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libonnxruntime.so"
+)
 target_include_directories("cpponnxrunner" PRIVATE
         ${CMAKE_SOURCE_DIR}/include/onnxruntime
         ${OpenCV_INCLUDE_DIRS})
@@ -48,4 +51,5 @@ target_link_libraries(
         ${android-lib}
         ${log-lib}
         onnxruntime
-        ${OpenCV_LIBS})
+        ${OpenCV_LIBS}
+)
