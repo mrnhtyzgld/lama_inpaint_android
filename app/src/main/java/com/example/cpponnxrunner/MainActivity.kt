@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
@@ -17,10 +18,10 @@ import com.example.cpponnxrunner.databinding.ActivityMainBinding
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.concurrent.Executors // ADDED
-import android.os.Handler           // ADDED
-import android.os.Looper           // ADDED
-import java.util.Locale            // ADDED
+import java.util.concurrent.Executors
+import android.os.Handler
+import android.os.Looper
+import java.util.Locale
 
 // TODO check optimization flags
 // TODO use NNAPI accelerator
