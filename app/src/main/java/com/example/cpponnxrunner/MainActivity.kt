@@ -40,9 +40,14 @@ class MainActivity : AppCompatActivity() {
     private val CAPTURE_IMAGE = 2000
     private val CAMERA_PERMISSION_CODE = 8
 
+    //model readiness + executor/handler
+    @Volatile private var modelReady = false
     // simple background executor and main-thread handler
     private val bg = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    //promote to field so we can enable after load
+    private lateinit var inferButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,7 +77,12 @@ class MainActivity : AppCompatActivity() {
                 val dtMs = SystemClock.elapsedRealtime() - t0Load
                 val dtSec = dtMs / 1000.0
                 mainHandler.post {
+                    modelReady = true                           // ADDED
                     Toast.makeText(this, String.format(Locale.US, "Model loaded (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
+                    // enable button only after model is ready
+                    if (this::inferButton.isInitialized) {
+                        inferButton.isEnabled = true            // ADDED
+                    }
                 }
             } catch (e: Throwable) {
                 Log.e("cpponnxrunner", "createSession failed", e)
@@ -82,7 +92,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val inferButton: Button = findViewById(R.id.infer_button)
+        // Init and disable infer button until model is ready
+        inferButton = findViewById(R.id.infer_button)
+        inferButton.isEnabled = false                              // ADDED
         inferButton.setOnClickListener(onInferenceButtonClickedListener)
 
         // Home screen status
@@ -126,6 +138,12 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
+
+        // hard guard — never start inference before model is ready
+        if (!modelReady) {
+            Toast.makeText(this, "Model is still loading. Please try again.", Toast.LENGTH_LONG).show()
+            return
+        }
 
         try {
             // 1) Input image -> ByteArray
@@ -178,7 +196,7 @@ class MainActivity : AppCompatActivity() {
                             val inBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                             binding.inputImage.setImageBitmap(inBitmap)
 
-                // Keep the switch on when using the camera
+                            // Keep the switch on when using the camera
                             if (requestCode == CAPTURE_IMAGE) {
                                 binding.cameraSetting.isChecked = true
                             }
