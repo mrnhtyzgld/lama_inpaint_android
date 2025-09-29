@@ -1,14 +1,20 @@
 #include "InferenceRunner.h"
-#include <opencv2/opencv.hpp>
-#include <opencv2/dnn.hpp>
-#include <stdexcept>
-#include <nnapi_provider_factory.h>
-#include <android/log.h>
-#include <onnxruntime_session_options_config_keys.h>
-#include <onnxruntime_cxx_api.h>
-#include <opencv2/opencv.hpp>
-#include <opencv2/dnn.hpp>
-#include <stdexcept>
+
+
+/* TODO #pragma once
+
+#include <thread>
+#include <unistd.h>
+
+inline std::string GetCoreCount() {
+    int n = static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
+    if (n <= 0) n = static_cast<int>(std::thread::hardware_concurrency());
+    return std::to_string(n > 0 ? n : 1);
+}*/
+
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "cpponnxrunner", __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  "cpponnxrunner", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "cpponnxrunner", __VA_ARGS__)
 
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
@@ -59,6 +65,7 @@ void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_th
     // model path is const wchar_t*
     const ORTCHAR_T *kModelPath = model_path_.c_str();
     session_ = Ort::Session(env_, kModelPath, sessionOptions_);
+    LOGI("Session created for model: %s", model_path_.c_str());
 }
 
 std::vector<uint8_t> InferenceRunner::runByteToByte(const std::vector<uint8_t> &imageBytes,

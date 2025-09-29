@@ -3,9 +3,16 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <stdexcept>
 
-#include <opencv2/core.hpp>
 #include <onnxruntime_cxx_api.h>
+#include <onnxruntime_c_api.h>
+#include <opencv2/core.hpp>
+#include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
+#include <nnapi_provider_factory.h>
+#include <android/log.h>
+#include <onnxruntime_session_options_config_keys.h>
 
 class InferenceRunner {
 public:
