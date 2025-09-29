@@ -49,6 +49,9 @@ class MainActivity : AppCompatActivity() {
     //promote to field so we can enable after load
     private lateinit var inferButton: Button
 
+    // ---- single-run guard ----
+    @Volatile private var isInferencing = false   // ADDED
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -102,6 +105,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val onInferenceButtonClickedListener: View.OnClickListener = View.OnClickListener {
+        // block UI action while an inference is in progress
+        if (isInferencing) {                                       // ADDED
+            Toast.makeText(this, "Inference already running.", Toast.LENGTH_SHORT).show()
+            return@OnClickListener
+        }
+
         val cameraSetting: Switch = findViewById(R.id.camera_setting)
         if (cameraSetting.isChecked) {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -145,6 +154,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // prevent concurrent runs (re-entry guard)
+        if (isInferencing) {                                       // ADDED
+            Toast.makeText(this, "Inference already running.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         try {
             // 1) Input image -> ByteArray
             val imageBytes: ByteArray = when (requestCode) {
@@ -174,6 +189,10 @@ class MainActivity : AppCompatActivity() {
                 mainHandler.post {
                     Toast.makeText(this, "Inference started…", Toast.LENGTH_SHORT).show()
                     binding.statusMessage.text = "Running inference…"
+                    isInferencing = true                                     // ADDED
+                    if (this::inferButton.isInitialized) {
+                        inferButton.isEnabled = false                        // ADDED
+                    }
                 }
                 val t0Infer = SystemClock.elapsedRealtime()
                 bg.execute {
@@ -201,23 +220,39 @@ class MainActivity : AppCompatActivity() {
                                 binding.cameraSetting.isChecked = true
                             }
                             Toast.makeText(this, String.format(Locale.US, "Inference finished (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
+                            isInferencing = false                              // ADDED
+                            if (this::inferButton.isInitialized) {
+                                inferButton.isEnabled = true                   // ADDED
+                            }
                         }
                     } catch (e: Throwable) {
                         Log.e("cpponnxrunner", "bytes infer failed", e)
                         mainHandler.post {
                             binding.statusMessage.text = "Inference error: ${e.message}"
                             Toast.makeText(this, "Inference error: ${e.message}", Toast.LENGTH_LONG).show()
+                            isInferencing = false                              // ADDED
+                            if (this::inferButton.isInitialized) {
+                                inferButton.isEnabled = true                   // ADDED
+                            }
                         }
                     }
                 }
             } catch (t: Throwable) {
                 Log.e("cpponnxrunner", "bytes infer failed (pre)", t)
                 binding.statusMessage.text = "Byte inference failed: ${t.message}"
+                isInferencing = false                                          // ADDED (safety)
+                if (this::inferButton.isInitialized) {
+                    inferButton.isEnabled = true                               // ADDED (safety)
+                }
             }
 
         } catch (t: Throwable) {
             Log.e("cpponnxrunner", "onActivityResult (bytes path) failed", t)
             binding.statusMessage.text = "Error: ${t.message}"
+            isInferencing = false                                              // ADDED (safety)
+            if (this::inferButton.isInitialized) {
+                inferButton.isEnabled = true                                   // ADDED (safety)
+            }
         }
     }
 
