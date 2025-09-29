@@ -18,6 +18,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 
+// TODO check optimization flags
+// TODO use nnapi accelerator
+// TODO use gpu device
+// TODO port your own onnx model
 
 class MainActivity : AppCompatActivity() {
 
