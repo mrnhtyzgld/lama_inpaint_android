@@ -1,4 +1,10 @@
 #include "InferenceRunner.h"
+#include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
+#include <stdexcept>
+#include <nnapi_provider_factory.h>
+#include <android/log.h>
+#include <onnxruntime_session_options_config_keys.h>
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
@@ -18,19 +24,36 @@ void InferenceRunner::init_model(std::string model_path) {
 void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_threads,
                                          GraphOptimizationLevel optimization_level,
                                          std::string provider_ = "") {
-    // TODO make use of different providers
     if (session_) return;
+    // TODO make use of different providers
     auto provider = Ort::GetAvailableProviders().front();
 
     // Setting up ONNX environment
     mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
-    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "Default");
+    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_VERBOSE, "Default");
 
     sessionOptions_.SetInterOpNumThreads(num_inter_threads);
     sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
     // optimization will take time and memory during startup
     sessionOptions_.SetGraphOptimizationLevel(optimization_level);
+
+    // 2) Derlemeye gömülü EP’leri logla
+    {
+        auto provs = Ort::GetAvailableProviders();
+        for (auto &p: provs) LOGI("Available EP: %s", p.c_str());
+    }
+
+
+    // NNAPI
+    //uint32_t nnapi_flags = 0;
+    //nnapi_flags |= NNAPI_FLAG_USE_FP16;
+    //nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
+    //nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
+    //Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
+
+    sessionOptions_.EnableProfiling("onnx_profile.json");
+
 
     // Start an ONNX Runtime session and create CPU memory info for input tensors.
     // model path is const wchar_t*
