@@ -1,16 +1,8 @@
 #include "InferenceRunner.h"
 
+// TODO save optimized graph for fast load?
 
-/* TODO #pragma once
 
-#include <thread>
-#include <unistd.h>
-
-inline std::string GetCoreCount() {
-    int n = static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
-    if (n <= 0) n = static_cast<int>(std::thread::hardware_concurrency());
-    return std::to_string(n > 0 ? n : 1);
-}*/
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "cpponnxrunner", __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  "cpponnxrunner", __VA_ARGS__)
@@ -19,7 +11,7 @@ inline std::string GetCoreCount() {
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
-    start_environment_(1,
+    start_environment_(8,
                        1,
                        GraphOptimizationLevel::ORT_ENABLE_ALL,
                        "CPUExecutionProvider");
@@ -50,13 +42,20 @@ void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_th
         for (auto &p: provs) LOGI("Available EP: %s", p.c_str());
     }
 
+    //XNNPACK
+
+    sessionOptions_.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning, "0");
+    sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", "4"}});
+
+    sessionOptions_.SetIntraOpNumThreads(1);
+
 
     // NNAPI
-    //uint32_t nnapi_flags = 0;
+    uint32_t nnapi_flags = 0;
     //nnapi_flags |= NNAPI_FLAG_USE_FP16;
     //nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
     //nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
-    //Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
+    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
 
     sessionOptions_.EnableProfiling("onnx_profile.json");
 
