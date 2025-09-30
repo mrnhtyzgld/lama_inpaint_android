@@ -279,25 +279,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // asset -> cache (you may give a different name at the destination)
+    // asset -> cache (streaming, no OOM )
     private fun copyAssetToCacheDir(assetFileName: String, cacheFileName: String): String {
-        mkCacheDir(cacheFileName)
-        val f = File("$cacheDir/$cacheFileName")
-        if (!f.exists()) {
-            try {
-                val modelFile = assets.open(assetFileName)
-                val size: Int = modelFile.available()
-                val buffer = ByteArray(size)
-                modelFile.read(buffer)
-                modelFile.close()
-                val fos = FileOutputStream(f)
-                fos.write(buffer)
-                fos.close()
-            } catch (e: Exception) {
-                throw RuntimeException(e)
+        val outFile = File(cacheDir, cacheFileName)
+        outFile.parentFile?.mkdirs()
+
+        if (!outFile.exists()) {
+            assets.open(assetFileName).use { input ->
+                FileOutputStream(outFile).use { output ->
+                    val buf = ByteArray(8 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n <= 0) break
+                        output.write(buf, 0, n)
+                    }
+                    output.fd.sync()
+                }
             }
         }
-        return f.path
+        return outFile.path
     }
 
     // Copies a folder (and its subcontents) to cache while preserving the relative structure
