@@ -102,6 +102,14 @@
                 android:text="@string/pick_image_from_camera"
                 tools:ignore="TouchTargetSizeCheck" />
 
+            <Switch
+                android:id="@+id/use_asset_setting"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Use default asset"
+                android:checked="true" />
+
+
             <Space
                 android:id="@+id/camera_setting_after_space"
                 android:layout_width="20dp"

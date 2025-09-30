@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inferButton: Button
 
     // ---- single-run guard ----
-    @Volatile private var isInferencing = false   // ADDED
+    @Volatile private var isInferencing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,11 +80,11 @@ class MainActivity : AppCompatActivity() {
                 val dtMs = SystemClock.elapsedRealtime() - t0Load
                 val dtSec = dtMs / 1000.0
                 mainHandler.post {
-                    modelReady = true                           // ADDED
+                    modelReady = true
                     Toast.makeText(this, String.format(Locale.US, "Model loaded (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
                     // enable button only after model is ready
                     if (this::inferButton.isInitialized) {
-                        inferButton.isEnabled = true            // ADDED
+                        inferButton.isEnabled = true
                     }
                 }
             } catch (e: Throwable) {
@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity() {
 
         // Init and disable infer button until model is ready
         inferButton = findViewById(R.id.infer_button)
-        inferButton.isEnabled = false                              // ADDED
+        inferButton.isEnabled = false
         inferButton.setOnClickListener(onInferenceButtonClickedListener)
 
         // Home screen status
@@ -106,11 +106,29 @@ class MainActivity : AppCompatActivity() {
 
     private val onInferenceButtonClickedListener: View.OnClickListener = View.OnClickListener {
         // block UI action while an inference is in progress
-        if (isInferencing) {                                       // ADDED
+        if (isInferencing) {
             Toast.makeText(this, "Inference already running.", Toast.LENGTH_SHORT).show()
             return@OnClickListener
         }
+        if (!modelReady) {
+            Toast.makeText(this, "Model is still loading. Please try again.", Toast.LENGTH_LONG).show()
+            return@OnClickListener
+        }
 
+        // 1) "Use default asset" açık ise: hiçbir popup göstermeden direkt çalıştır
+        val useAsset: Switch = findViewById(R.id.use_asset_setting)
+        if (useAsset.isChecked) {
+            try {
+                val imageBytes = assets.open(SAMPLE_IMAGE_ASSET).use { it.readBytes() }
+                val maskBytes  = assets.open(SAMPLE_MASK_ASSET).use { it.readBytes() }
+                runInference(imageBytes, maskBytes, sourceLabel = "default asset")
+            } catch (e: Throwable) {
+                Toast.makeText(this, "Asset read error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+            return@OnClickListener
+        }
+
+        // 2) Asset kapalı ise: kamera/galeri seçeneği
         val cameraSetting: Switch = findViewById(R.id.camera_setting)
         if (cameraSetting.isChecked) {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -120,9 +138,10 @@ class MainActivity : AppCompatActivity() {
                 startActivityForResult(cameraIntent, CAPTURE_IMAGE)
             }
         } else {
-            val intent = Intent()
-            intent.type = "image/*"
-            intent.action = Intent.ACTION_GET_CONTENT
+            val intent = Intent().apply {
+                type = "image/*"
+                action = Intent.ACTION_GET_CONTENT
+            }
             startActivityForResult(Intent.createChooser(intent, "Select Image"), PICK_IMAGE)
         }
     }
@@ -155,7 +174,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // prevent concurrent runs (re-entry guard)
-        if (isInferencing) {                                       // ADDED
+        if (isInferencing) {
             Toast.makeText(this, "Inference already running.", Toast.LENGTH_SHORT).show()
             return
         }
@@ -180,78 +199,25 @@ class MainActivity : AppCompatActivity() {
                 else -> return
             }
 
-            // bytes-based infer (assets -> ByteArray -> JNI -> bytes -> cache) ---
-            try {
-                val maskBytes: ByteArray = assets.open(SAMPLE_MASK_ASSET).use { it.readBytes() }
-                val imageBytes: ByteArray = assets.open(SAMPLE_IMAGE_ASSET).use { it.readBytes() }
 
-                // Run inference in background; report duration in seconds
-                mainHandler.post {
-                    Toast.makeText(this, "Inference started…", Toast.LENGTH_SHORT).show()
-                    binding.statusMessage.text = "Running inference…"
-                    isInferencing = true                                     // ADDED
-                    if (this::inferButton.isInitialized) {
-                        inferButton.isEnabled = false                        // ADDED
-                    }
-                }
-                val t0Infer = SystemClock.elapsedRealtime()
-                bg.execute {
-                    try {
-                        val outBytes: ByteArray = inferFromBytes(imageBytes, maskBytes)
-                        val outPath = writeBytesToCache(OUTPUT_IMAGE_PATH, outBytes)
-                        val dtMs = SystemClock.elapsedRealtime() - t0Infer
-                        val dtSec = dtMs / 1000.0
+            val maskBytes: ByteArray = assets.open(SAMPLE_MASK_ASSET).use { it.readBytes() }
 
-                        // UI update (main thread)
-                        mainHandler.post {
-                            Log.i("cpponnxrunner", "Output saved to: $outPath")
-                            val outBitmap = BitmapFactory.decodeByteArray(outBytes, 0, outBytes.size)
-                            try {
-                                binding.outputImage.setImageBitmap(outBitmap)
-                                binding.statusMessage.text = String.format(Locale.US, "Output rendered (%.2f s)", dtSec)
-                            } catch (_: Throwable) {
-                                binding.statusMessage.text = String.format(Locale.US, "Output saved to: %s (%.2f s)", outPath, dtSec)
-                            }
-                            val inBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                            binding.inputImage.setImageBitmap(inBitmap)
-
-                            // Keep the switch on when using the camera
-                            if (requestCode == CAPTURE_IMAGE) {
-                                binding.cameraSetting.isChecked = true
-                            }
-                            Toast.makeText(this, String.format(Locale.US, "Inference finished (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
-                            isInferencing = false                              // ADDED
-                            if (this::inferButton.isInitialized) {
-                                inferButton.isEnabled = true                   // ADDED
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        Log.e("cpponnxrunner", "bytes infer failed", e)
-                        mainHandler.post {
-                            binding.statusMessage.text = "Inference error: ${e.message}"
-                            Toast.makeText(this, "Inference error: ${e.message}", Toast.LENGTH_LONG).show()
-                            isInferencing = false                              // ADDED
-                            if (this::inferButton.isInitialized) {
-                                inferButton.isEnabled = true                   // ADDED
-                            }
-                        }
-                    }
-                }
-            } catch (t: Throwable) {
-                Log.e("cpponnxrunner", "bytes infer failed (pre)", t)
-                binding.statusMessage.text = "Byte inference failed: ${t.message}"
-                isInferencing = false                                          // ADDED (safety)
-                if (this::inferButton.isInitialized) {
-                    inferButton.isEnabled = true                               // ADDED (safety)
-                }
+            if (requestCode == CAPTURE_IMAGE) {
+                binding.cameraSetting.isChecked = true
             }
 
+            runInference(
+                imageBytes = imageBytes,
+                maskBytes = maskBytes,
+                sourceLabel = if (requestCode == CAPTURE_IMAGE) "camera" else "gallery"
+            )
+
         } catch (t: Throwable) {
-            Log.e("cpponnxrunner", "onActivityResult (bytes path) failed", t)
+            Log.e("cpponnxrunner", "onActivityResult failed", t)
             binding.statusMessage.text = "Error: ${t.message}"
-            isInferencing = false                                              // ADDED (safety)
+            isInferencing = false
             if (this::inferButton.isInitialized) {
-                inferButton.isEnabled = true                                   // ADDED (safety)
+                inferButton.isEnabled = true
             }
         }
     }
@@ -262,6 +228,58 @@ class MainActivity : AppCompatActivity() {
             releaseSession()
         } catch (t: Throwable) {
             Log.w("cpponnxrunner", "releaseSession failed", t)
+        }
+    }
+
+    // Inference helpers
+    private fun runInference(imageBytes: ByteArray, maskBytes: ByteArray, sourceLabel: String) {
+        // Re-entry guard + UI
+        mainHandler.post {
+            isInferencing = true
+            if (this::inferButton.isInitialized) {
+                inferButton.isEnabled = false
+            }
+            binding.statusMessage.text = "Running inference… ($sourceLabel)"
+            Toast.makeText(this, "Inference started…", Toast.LENGTH_SHORT).show()
+        }
+
+        val t0Infer = SystemClock.elapsedRealtime()
+        bg.execute {
+            try {
+                val outBytes: ByteArray = inferFromBytes(imageBytes, maskBytes)
+                val outPath = writeBytesToCache(OUTPUT_IMAGE_PATH, outBytes)
+                val dtMs = SystemClock.elapsedRealtime() - t0Infer
+                val dtSec = dtMs / 1000.0
+
+                mainHandler.post {
+                    Log.i("cpponnxrunner", "Output saved to: $outPath")
+                    val outBitmap = BitmapFactory.decodeByteArray(outBytes, 0, outBytes.size)
+                    try {
+                        binding.outputImage.setImageBitmap(outBitmap)
+                        binding.statusMessage.text = String.format(Locale.US, "Output rendered (%.2f s)", dtSec)
+                    } catch (_: Throwable) {
+                        binding.statusMessage.text = String.format(Locale.US, "Output saved to: %s (%.2f s)", outPath, dtSec)
+                    }
+                    val inBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                    binding.inputImage.setImageBitmap(inBitmap)
+
+                    Toast.makeText(this, String.format(Locale.US, "Inference finished (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
+                    isInferencing = false
+                    if (this::inferButton.isInitialized) {
+                        inferButton.isEnabled = true
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e("cpponnxrunner", "inference failed", e)
+                mainHandler.post {
+                    binding.statusMessage.text = "Inference error: ${e.message}"
+                    Toast.makeText(this, "Inference error: ${e.message}", Toast.LENGTH_LONG).show()
+                    isInferencing = false
+                    if (this::inferButton.isInitialized) {
+                        inferButton.isEnabled = true
+                    }
+                }
+            }
         }
     }
 
