@@ -34,7 +34,8 @@ private:
     cv::Mat ort_output_to_mat(const Ort::Value &out);
 
     void start_environment_(int num_inter_threads, int num_intra_threads,
-                                             GraphOptimizationLevel optimization_level);
+                                             GraphOptimizationLevel optimization_level,
+                                             int num_cpu_core, bool use_xnn, bool use_nnapi);
 
     cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
 
