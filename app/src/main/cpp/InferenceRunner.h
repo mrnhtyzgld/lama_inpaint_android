@@ -14,6 +14,39 @@
 #include <android/log.h>
 #include <onnxruntime_session_options_config_keys.h>
 
+// ----- Minimal ekler: NNAPI/XNNPACK ve genel runner ayarları -----
+
+struct NnapiOptions {
+    enum class Flag : uint32_t {
+        None        = 0,
+        UseFp16     = 1u << 0,  // NNAPI_FLAG_USE_FP16
+        CpuDisabled = 1u << 1,  // NNAPI_FLAG_CPU_DISABLED
+        CpuOnly     = 1u << 2,  // NNAPI_FLAG_CPU_ONLY
+        UseNchw     = 1u << 3,  // NNAPI_FLAG_USE_NCHW
+    };
+    static constexpr uint32_t to_raw(Flag f) { return static_cast<uint32_t>(f); }
+
+    // bitwise helpers
+    friend constexpr Flag operator|(Flag a, Flag b) {
+        return static_cast<Flag>( static_cast<uint32_t>(a) | static_cast<uint32_t>(b) );
+    }
+    friend constexpr Flag& operator|=(Flag& a, Flag b) { a = a | b; return a; }
+
+    Flag flags = Flag::None;  // default: tüm bayraklar kapalı
+};
+
+struct RunnerSettings {
+    int  num_cpu_cores;
+
+    bool use_xnnpack   = true;
+    bool use_nnapi     = true;
+
+    bool use_parallel_execution  = false; // github says parallel execution is deprecated but
+    bool use_layout_optimization_instead_of_extended = false; // website said if not nnapi use extended but this seems faster
+
+    NnapiOptions   nnapi{};
+};
+
 class InferenceRunner {
 public:
     InferenceRunner() = default;
@@ -33,9 +66,7 @@ private:
 
     cv::Mat ort_output_to_mat(const Ort::Value &out);
 
-    void start_environment_(int num_inter_threads, int num_intra_threads,
-                                             GraphOptimizationLevel optimization_level,
-                                             int num_cpu_core, bool use_xnn, bool use_nnapi);
+    void start_environment_(const RunnerSettings& s);
 
     cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
 

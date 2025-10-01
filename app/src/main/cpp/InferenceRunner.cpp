@@ -6,49 +6,46 @@
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
-    start_environment_(0, // between each operator, 0 is #cpu core, needs ORT_PARALLEL
-                       0, // inside each operator, 0 is #cpu core
-                       GraphOptimizationLevel::ORT_ENABLE_BASIC, // basic if nnapi enabled extended if not
-                       4,true,true);
 
+    RunnerSettings s;
+    s.num_cpu_cores = 4;
+    s.use_xnnpack = true;
+    s.use_nnapi = true;
 
+    start_environment_(s);
 }
 
-void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_threads,
-                                         GraphOptimizationLevel optimization_level,
-                                         int num_cpu_core, bool use_xnn, bool use_nnapi) {
+void InferenceRunner::start_environment_(const RunnerSettings &s) {
     if (session_) return;
 
-    // Setting up ONNX environment
     mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+    sessionOptions_.SetInterOpNumThreads(s.num_cpu_cores);
+    if (!s.use_xnnpack) sessionOptions_.SetIntraOpNumThreads(s.num_cpu_cores);
 
-    sessionOptions_.SetGraphOptimizationLevel(optimization_level);
-    sessionOptions_.SetInterOpNumThreads(num_inter_threads);
-    if (!use_xnn) sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
-    // optimization will take time and memory during startup
-    sessionOptions_.SetGraphOptimizationLevel(optimization_level);
+    if (s.use_nnapi) sessionOptions_.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
+    else if (s.use_layout_optimization_instead_of_extended) sessionOptions_.SetGraphOptimizationLevel(ORT_ENABLE_LAYOUT);
+    else sessionOptions_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
+
+    if (s.use_parallel_execution)sessionOptions_.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
 
     //XNNPACK
-    if (use_xnn) {
+    if (s.use_xnnpack) {
         sessionOptions_.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning,
-                                       std::to_string(num_cpu_core).c_str());
+                                       std::to_string(s.num_cpu_cores).c_str());
         sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", std::to_string(
-                num_cpu_core).c_str()}});
+                s.num_cpu_cores).c_str()}});
         sessionOptions_.SetIntraOpNumThreads(1);
     }
 
     //NNAPI - Android only
-    if (use_nnapi) {
-        //sessionOptions_.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
+    if (s.use_nnapi) {
+        const auto f = s.nnapi.flags;
+        const uint32_t nnapi_flags = NnapiOptions::to_raw(f);
 
-        uint32_t nnapi_flags = 0;
-        //nnapi_flags |= NNAPI_FLAG_USE_FP16;
-        //nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
-        //nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
-        //nnapi_flags |= NNAPI_FLAG_USE_NCHW;
         Ort::ThrowOnError(
                 OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
     }
+
 
 
     // Start an ONNX Runtime session and create CPU memory info for input tensors.
