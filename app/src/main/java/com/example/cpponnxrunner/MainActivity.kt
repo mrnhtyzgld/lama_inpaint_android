@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.opengl.GLES20
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -54,12 +55,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val v = GLES20.glGetString(GLES20.GL_VENDOR)
+        val r = GLES20.glGetString(GLES20.GL_RENDERER)
+        Log.i("GLINFO", "VENDOR=$v | RENDERER=$r")
 
         Log.i("OpenCV", "OpenCV version = ${cvVersion()}")
         Toast.makeText(this, "OpenCV version: ${cvVersion()}", Toast.LENGTH_LONG).show()
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        bg.execute { // check hardware acceleration with tag:GLINFO
+            val (vendor, renderer) = GlInfo.query()
+            Log.i("GLINFO", "VENDOR=$vendor | RENDERER=$renderer")
+        }
+
 
         // --- Copy Assets -> Cache ---
         copyAssetToCacheDir(MODEL_ASSET_PATH, "inference.onnx")     // => $cacheDir/inference.onnx

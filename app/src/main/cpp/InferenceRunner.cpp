@@ -1,5 +1,6 @@
 #include "InferenceRunner.h"
-
+#include <atomic>
+static std::atomic<bool> g_profile_dumped{false};
 // TODO save optimized graph for fast load?
 
 
@@ -11,60 +12,96 @@
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
-    start_environment_(8,
-                       1,
-                       GraphOptimizationLevel::ORT_ENABLE_ALL,
-                       "CPUExecutionProvider");
+    start_environment_(0, // between each operator, 0 is #cpu core, needs ORT_PARALLEL
+                       0, // inside each operator, 0 is #cpu core
+                       GraphOptimizationLevel::ORT_ENABLE_BASIC, // basic if nnapi enabled extended if not
+                       );
 
 
 }
 
+// dosyanın başında (gerekirse) ekleyebilirsin:
+// #include <onnxruntime_cxx_api.h>  // zaten kullanıyorsun
+// #include <onnxruntime_c_api.h>    // çoğu zaman cxx_api içinden gelir; ayrı eklemek sorun olmaz
+
+void InferenceRunner::end_profiling_and_log() {
+    if (!session_) return;
+
+    try {
+        // C API üzerinden EndProfiling
+        Ort::AllocatorWithDefaultOptions allocator; // OrtAllocator*
+        char *path_c = nullptr;
+
+        // NOT: bazı başlıklarda fonksiyon adı OrtSessionEndProfiling olarak geçer,
+        // fakat C API vtable'ında Ort::GetApi().SessionEndProfiling(...) kullanılır.
+        Ort::ThrowOnError(Ort::GetApi().SessionEndProfiling(session_, allocator, &path_c));
+        if (path_c) {
+            LOGI("PROFILE_PATH=%s", path_c);
+            allocator.Free(path_c);
+        } else {
+            LOGW("EndProfiling returned null path (profiling disabled?)");
+        }
+    } catch (const Ort::Exception &e) {
+        LOGW("EndProfiling failed: %s", e.what());
+    }
+}
+
 void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_threads,
                                          GraphOptimizationLevel optimization_level,
-                                         std::string provider_ = "") {
+                                         int num_cpu_core, bool use_xnn, bool use_nnapi, bool is_debug) {
     if (session_) return;
-    // TODO make use of different providers
-    auto provider = Ort::GetAvailableProviders().front();
 
-    // Setting up ONNX environment
+    std::string cache_dir = model_path_;
+    if (auto pos = cache_dir.find_last_of('/'); pos != std::string::npos)
+        cache_dir = cache_dir.substr(0, pos);
+
+    // --- 1) ORT env + session options ---
     mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+    if (is_debug) env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_VERBOSE, "Default");
+    else env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_ERROR, "Default");
 
-    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_VERBOSE, "Default");
-
-    sessionOptions_.SetInterOpNumThreads(num_inter_threads);
-    sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
-    // optimization will take time and memory during startup
     sessionOptions_.SetGraphOptimizationLevel(optimization_level);
+    sessionOptions_.SetInterOpNumThreads(num_inter_threads);
+    if (!use_xnn) sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
 
-    // 2) Derlemeye gömülü EP’leri logla
-    {
+    if (is_debug) sessionOptions_.SetLogSeverityLevel(0);   // 0=VERBOSE
+
+    if (is_debug){
         auto provs = Ort::GetAvailableProviders();
         for (auto &p: provs) LOGI("Available EP: %s", p.c_str());
     }
 
+
     //XNNPACK
+    if (use_xnn) {
+        sessionOptions_.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning,
+                                       std::to_string(num_cpu_core).c_str());
+        sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", std::to_string(
+                num_cpu_core).c_str()}});
+        sessionOptions_.SetIntraOpNumThreads(1);
+    }
 
-    sessionOptions_.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning, "0");
-    sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", "4"}});
+    //NNAPI - Android only
+    if (use_nnapi) {
+        //sessionOptions_.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
 
-    sessionOptions_.SetIntraOpNumThreads(1);
+        uint32_t nnapi_flags = 0;
+        //nnapi_flags |= NNAPI_FLAG_USE_FP16;
+        nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
+        //nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
+        //nnapi_flags |= NNAPI_FLAG_USE_NCHW;
+        Ort::ThrowOnError(
+                OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
+    }
 
-
-    // NNAPI
-    uint32_t nnapi_flags = 0;
-    //nnapi_flags |= NNAPI_FLAG_USE_FP16;
-    //nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
-    //nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
-    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
-
-    sessionOptions_.EnableProfiling("onnx_profile.json");
+    if (is_debug) sessionOptions_.EnableProfiling((cache_dir + "/ort_profile").c_str());
 
 
     // Start an ONNX Runtime session and create CPU memory info for input tensors.
     // model path is const wchar_t*
-    const ORTCHAR_T *kModelPath = model_path_.c_str();
-    session_ = Ort::Session(env_, kModelPath, sessionOptions_);
+    session_ = Ort::Session(env_, model_path_.c_str(), sessionOptions_);
     LOGI("Session created for model: %s", model_path_.c_str());
+    if (is_debug) LOGI("Profiling prefix: %s", (cache_dir + "/ort_profile").c_str());
 }
 
 std::vector<uint8_t> InferenceRunner::runByteToByte(const std::vector<uint8_t> &imageBytes,
@@ -132,12 +169,30 @@ std::vector<cv::Mat> InferenceRunner::run(const cv::Mat &image, const cv::Mat &m
     for (auto &s: output_names_)
         output_names_c.push_back(s.c_str());
 
+    LOGI("ORT Run begin");
     // Outputs
     auto outputs =
             session_.Run(Ort::RunOptions{},
                          input_names_c.data(), inputs.data(), inputs.size(),
                          output_names_c.data(), output_names_c.size()
             );
+    // session_.Run(...) sonrası:
+    if (!g_profile_dumped.exchange(true)) {
+        try {
+            Ort::AllocatorWithDefaultOptions alloc;
+            char *path = nullptr;
+            Ort::ThrowOnError(Ort::GetApi().SessionEndProfiling(session_, alloc, &path));
+            if (path) {
+                LOGI("PROFILE_PATH=%s", path); // tam dosya yolu
+                alloc.Free(path);
+            } else {
+                LOGW("EndProfiling returned null path");
+            }
+        } catch (const Ort::Exception &e) {
+            LOGW("EndProfiling failed: %s", e.what());
+        }
+    }
+    LOGI("ORT Run end: outputs=%zu", outputs.size());
 
 
     // Process outputs

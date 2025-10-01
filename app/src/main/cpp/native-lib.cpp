@@ -60,6 +60,7 @@ Java_com_example_cpponnxrunner_MainActivity_createSession(
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_cpponnxrunner_MainActivity_releaseSession(
         JNIEnv * /*env*/, jobject /* this */) {
+    runner.end_profiling_and_log();
     return;
 }
 

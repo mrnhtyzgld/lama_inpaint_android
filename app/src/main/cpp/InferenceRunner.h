@@ -27,15 +27,17 @@ public:
     std::vector<uint8_t> runByteToByte(const std::vector<uint8_t> &imageBytes,
                                        const std::vector<uint8_t> &maskBytes);
 
+    void end_profiling_and_log();
+
 private:
     // Helper functions
     void find_input_output_info_();
 
     cv::Mat ort_output_to_mat(const Ort::Value &out);
 
-    void start_environment_(int num_inter_threads, int num_intra_threads,
+    void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_threads,
                                              GraphOptimizationLevel optimization_level,
-                                             std::string provider_);
+                                             int num_cpu_core, bool use_xnn, bool use_nnapi, bool is_debug);
 
     cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
 
