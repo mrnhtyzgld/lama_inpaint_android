@@ -3,50 +3,34 @@
 // TODO save optimized graph for fast load?
 
 
-
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "cpponnxrunner", __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  "cpponnxrunner", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "cpponnxrunner", __VA_ARGS__)
-
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
-    start_environment_(8,
-                       1,
-                       GraphOptimizationLevel::ORT_ENABLE_ALL,
-                       "CPUExecutionProvider");
+    start_environment_(0,
+                       0,
+                       GraphOptimizationLevel::ORT_ENABLE_ALL);
 
 
 }
 
 void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_threads,
-                                         GraphOptimizationLevel optimization_level,
-                                         std::string provider_ = "") {
+                                         GraphOptimizationLevel optimization_level) {
     if (session_) return;
-    // TODO make use of different providers
-    auto provider = Ort::GetAvailableProviders().front();
 
     // Setting up ONNX environment
     mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
-    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_VERBOSE, "Default");
+    env_ = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_FATAL, "Default");
 
     sessionOptions_.SetInterOpNumThreads(num_inter_threads);
-    sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
+    //sessionOptions_.SetIntraOpNumThreads(num_intra_threads);
     // optimization will take time and memory during startup
     sessionOptions_.SetGraphOptimizationLevel(optimization_level);
-
-    // 2) Derlemeye gömülü EP’leri logla
-    {
-        auto provs = Ort::GetAvailableProviders();
-        for (auto &p: provs) LOGI("Available EP: %s", p.c_str());
-    }
 
     //XNNPACK
 
     sessionOptions_.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning, "0");
     sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", "4"}});
-
     sessionOptions_.SetIntraOpNumThreads(1);
 
 
@@ -55,16 +39,11 @@ void InferenceRunner::start_environment_(int num_inter_threads, int num_intra_th
     //nnapi_flags |= NNAPI_FLAG_USE_FP16;
     //nnapi_flags |= NNAPI_FLAG_CPU_DISABLED;
     //nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
-    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
-
-    sessionOptions_.EnableProfiling("onnx_profile.json");
+    //Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions_, nnapi_flags));
 
 
     // Start an ONNX Runtime session and create CPU memory info for input tensors.
-    // model path is const wchar_t*
-    const ORTCHAR_T *kModelPath = model_path_.c_str();
-    session_ = Ort::Session(env_, kModelPath, sessionOptions_);
-    LOGI("Session created for model: %s", model_path_.c_str());
+    session_ = Ort::Session(env_, model_path_.c_str(), sessionOptions_);
 }
 
 std::vector<uint8_t> InferenceRunner::runByteToByte(const std::vector<uint8_t> &imageBytes,
