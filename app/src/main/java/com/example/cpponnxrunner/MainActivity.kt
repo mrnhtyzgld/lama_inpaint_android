@@ -23,10 +23,6 @@ import android.os.Handler
 import android.os.Looper
 import java.util.Locale
 
-// TODO check optimization flags
-// TODO use NNAPI accelerator
-// TODO use GPU device
-// TODO port your own ONNX model
 
 class MainActivity : AppCompatActivity() {
 
