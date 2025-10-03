@@ -14,8 +14,6 @@
 #include <android/log.h>
 #include <onnxruntime_session_options_config_keys.h>
 
-// ----- Minimal ekler: NNAPI/XNNPACK ve genel runner ayarları -----
-
 struct NnapiOptions {
     enum class Flag : uint32_t {
         None        = 0,
@@ -32,8 +30,13 @@ struct NnapiOptions {
     }
     friend constexpr Flag& operator|=(Flag& a, Flag b) { a = a | b; return a; }
 
-    Flag flags = Flag::None;  // default: tüm bayraklar kapalı
+    Flag flags = Flag::None;  // default: all flags closed
 };
+
+struct XnnPackOptions {
+    bool use_session_threads = false;
+};
+
 
 struct RunnerSettings {
     int  num_cpu_cores;
@@ -45,6 +48,7 @@ struct RunnerSettings {
     bool use_layout_optimization_instead_of_extended = false; // website said if not nnapi use extended but this seems faster
 
     NnapiOptions   nnapi{};
+    XnnPackOptions xnnpack{};
 };
 
 class InferenceRunner {

@@ -2,7 +2,6 @@
 
 // TODO save optimized graph for fast load?
 
-
 void InferenceRunner::init_model(std::string model_path) {
     model_path_ = model_path;
     find_input_output_info_();
@@ -20,7 +19,7 @@ void InferenceRunner::start_environment_(const RunnerSettings &s) {
 
     mem_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
     sessionOptions_.SetInterOpNumThreads(s.num_cpu_cores);
-    if (!s.use_xnnpack) sessionOptions_.SetIntraOpNumThreads(s.num_cpu_cores);
+    if (!s.use_xnnpack || s.xnnpack.use_session_threads) sessionOptions_.SetIntraOpNumThreads(s.num_cpu_cores);
 
     if (s.use_nnapi) sessionOptions_.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
     else if (s.use_layout_optimization_instead_of_extended) sessionOptions_.SetGraphOptimizationLevel(ORT_ENABLE_LAYOUT);
@@ -32,9 +31,14 @@ void InferenceRunner::start_environment_(const RunnerSettings &s) {
     if (s.use_xnnpack) {
         sessionOptions_.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning,
                                        std::to_string(s.num_cpu_cores).c_str());
-        sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", std::to_string(
-                s.num_cpu_cores).c_str()}});
-        sessionOptions_.SetIntraOpNumThreads(1);
+        if (!s.xnnpack.use_session_threads) {
+            sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", std::to_string(
+                    s.num_cpu_cores).c_str()}});
+            sessionOptions_.SetIntraOpNumThreads(0);
+
+        } else {
+            sessionOptions_.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", "0"}});
+        }
     }
 
     //NNAPI - Android only
