@@ -75,9 +75,10 @@ Java_com_example_cpponnxrunner_MainActivity_createSession(JNIEnv* env, jobject t
     auto paths = JStringArrayToVector(env, modelPaths);
 
     RunnerSettings s{};
-    s.num_cpu_cores = 8;
-    s.use_xnnpack   = true;
-    s.use_nnapi     = true;
+    s.num_cpu_cores = 4;
+    s.use_xnnpack   = false;
+    s.use_nnapi     = false;
+    s.use_layout_optimization_instead_of_extended = true;
 
     auto models = g_runner.init_models(paths, s);
 
@@ -100,7 +101,7 @@ Java_com_example_cpponnxrunner_MainActivity_cvVersion(JNIEnv *env, jobject) {
 
 extern "C"
 JNIEXPORT jbyteArray JNICALL
-Java_com_example_cpponnxrunner_MainActivity_inferFromBytes(JNIEnv *env, jobject thiz,
+Java_com_example_cpponnxrunner_MainActivity_inferFromBytesParallel(JNIEnv *env, jobject thiz,
                                                            jbyteArray image_bytes,
                                                            jbyteArray mask_bytes) {
     if (!g_modelA || !g_modelB) return nullptr;
@@ -205,4 +206,28 @@ Java_com_example_cpponnxrunner_MainActivity_inferFromBytes(JNIEnv *env, jobject 
     if (!pngBytes_2.empty()) return VectorToJByteArray(env, pngBytes_2);
     return nullptr;
 }
+
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_com_example_cpponnxrunner_MainActivity_inferFromBytes(JNIEnv *env, jobject thiz,
+                                                           jbyteArray image_bytes,
+                                                           jbyteArray mask_bytes) {
+
+
+    // Decode
+    std::vector<uint8_t> imgV  = JByteArrayToVector(env, image_bytes);
+    std::vector<uint8_t> maskV = JByteArrayToVector(env, mask_bytes);
+
+    std::vector<uint8_t> pngBytes_1;
+    //std::vector<uint8_t> pngBytes_2;
+    try {
+        pngBytes_1 = g_modelA->runEndToEnd(imgV, maskV);
+        //pngBytes_2 = g_modelB->runEndToEnd(imgV,maskV);
+    } catch (...) {
+        return nullptr;
+    }
+
+    return VectorToJByteArray(env, pngBytes_1);
+}
+
 

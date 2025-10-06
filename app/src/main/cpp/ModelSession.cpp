@@ -231,12 +231,12 @@ Ort::SessionOptions ModelSession::init_session(RunnerSettings s) {
     // XNNPACK
     if (s.use_xnnpack) {
         so.AddConfigEntry(kOrtSessionOptionsConfigAllowIntraOpSpinning,
-                          std::to_string(s.num_cpu_cores).c_str());
+                          "0");
         if (!s.xnnpack.use_session_threads) {
             so.AppendExecutionProvider("XNNPACK",
                                        {{"intra_op_num_threads",
-                                         std::to_string(s.num_cpu_cores).c_str()}}); // TODO "1"
-            so.SetIntraOpNumThreads(0);
+                                         std::to_string(s.num_cpu_cores).c_str()}});
+            so.SetIntraOpNumThreads(1); // TODO 0 is faster
         } else {
             so.AppendExecutionProvider("XNNPACK", {{"intra_op_num_threads", "0"}});
         }
