@@ -32,6 +32,7 @@ add_library("cpponnxrunner" SHARED
         native-lib.cpp
         utils.cpp
         InferenceRunner.cpp
+        ModelSession.cpp
 )
 
 add_library(onnxruntime SHARED IMPORTED)

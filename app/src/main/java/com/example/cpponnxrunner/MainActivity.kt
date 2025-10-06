@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
@@ -18,15 +20,14 @@ import com.example.cpponnxrunner.databinding.ActivityMainBinding
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.concurrent.Executors
-import android.os.Handler
-import android.os.Looper
 import java.util.Locale
+import java.util.concurrent.Executors
 
 
 class MainActivity : AppCompatActivity() {
 
     private val MODEL_ASSET_PATH = "lama_fp32.onnx"
+    private val Model_2_ASSET_PATH = "lama_fp32_2.onnx"
     private val SAMPLE_IMAGE_ASSET = "images/input_image.jpg"
     private val SAMPLE_MASK_ASSET = "images/dilated_mask.png"
     private val OUTPUT_IMAGE_PATH = "output/output_image.png"
@@ -59,6 +60,7 @@ class MainActivity : AppCompatActivity() {
 
         // --- Copy Assets -> Cache ---
         copyAssetToCacheDir(MODEL_ASSET_PATH, "inference.onnx")     // => $cacheDir/inference.onnx
+        copyAssetToCacheDir(Model_2_ASSET_PATH, "inference_2.onnx")     // => $cacheDir/inference_1.onnx
         copyFileOrDir("images")                                     // => $cacheDir/images/* (for sample input & mask)
 
         val copiedDir = File(cacheDir, "images")
@@ -66,13 +68,15 @@ class MainActivity : AppCompatActivity() {
 
         // Create ORT session in background; measure duration; show English toasts
         val modelPath = "$cacheDir/inference.onnx"
+        val model2Path = "$cacheDir/inference_2.onnx"
         mainHandler.post {
             Toast.makeText(this, "Loading model…", Toast.LENGTH_SHORT).show()
         }
         val t0Load = SystemClock.elapsedRealtime()
         bg.execute {
             try {
-                createSession(modelPath)
+                val modelPaths: Array<String> = arrayOf(modelPath, model2Path);
+                createSession(modelPaths)
                 val dtMs = SystemClock.elapsedRealtime() - t0Load
                 val dtSec = dtMs / 1000.0
                 mainHandler.post {
@@ -339,7 +343,7 @@ class MainActivity : AppCompatActivity() {
     // JNI bridges
     // =========================
 
-    external fun createSession(cacheDir: String)
+    external fun createSession(modelPaths: Array<String>)
     external fun inferFromBytes(image: ByteArray, mask: ByteArray): ByteArray
     external fun releaseSession()
 
