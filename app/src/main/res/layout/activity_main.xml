@@ -18,14 +18,33 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <Button
-            android:id="@+id/infer_button"
-            style="?android:attr/buttonBarButtonStyle"
+        <!-- mevcut satırda butonlar yan yana -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:text="@string/inference"
-            android:textAllCaps="false" />
+            android:gravity="center_horizontal"
+            android:padding="8dp">
+
+            <Button
+                android:id="@+id/infer_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Inference" />
+
+            <Space
+                android:layout_width="8dp"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/infer_button_model2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Test" />
+        </LinearLayout>
+
 
         <LinearLayout
             android:id="@+id/image_layout"
