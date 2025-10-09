@@ -49,10 +49,10 @@ private:
     RunnerSettings settings_;
 
     // IO bilgileri
-    int image_idx_  = 0;
-    int mask_idx_   = 1;
-    int image_width_  = 512;
-    int image_height_ = 512;
-    std::vector<std::string> input_names_  = {"image", "mask"};
-    std::vector<std::string> output_names_ = {"output"};
+    int image_idx_;
+    int mask_idx_;
+    int image_width_;
+    int image_height_;
+    std::vector<std::string> input_names_;
+    std::vector<std::string> output_names_;
 };
