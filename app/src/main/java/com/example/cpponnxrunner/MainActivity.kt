@@ -59,16 +59,16 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // --- Copy Assets -> Cache ---
-        copyAssetToCacheDir(MODEL_ASSET_PATH, "inference.onnx")     // => $cacheDir/inference.onnx
-        copyAssetToCacheDir(Model_2_ASSET_PATH, "inference_2.onnx")     // => $cacheDir/inference_1.onnx
+        copyAssetToCacheDir(MODEL_ASSET_PATH, MODEL_ASSET_PATH)         // => $cacheDir/inference.onnx
+        copyAssetToCacheDir(Model_2_ASSET_PATH, Model_2_ASSET_PATH)     // => $cacheDir/inference_1.onnx
         copyFileOrDir("images")                                     // => $cacheDir/images/* (for sample input & mask)
 
         val copiedDir = File(cacheDir, "images")
         Log.i("cpponnxrunner", "images dir=${copiedDir.absolutePath} list=${copiedDir.list()?.toList()}")
 
         // Create ORT session in background; measure duration; show English toasts
-        val modelPath = "$cacheDir/inference.onnx"
-        val model2Path = "$cacheDir/inference_2.onnx"
+        val modelPath  = File(cacheDir, MODEL_ASSET_PATH).absolutePath
+        val model2Path = File(cacheDir, Model_2_ASSET_PATH).absolutePath
         mainHandler.post {
             Toast.makeText(this, "Loading model…", Toast.LENGTH_SHORT).show()
         }
