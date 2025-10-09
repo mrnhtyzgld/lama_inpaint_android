@@ -1,16 +1,10 @@
-
-
-#ifndef CPPONNXRUNNER_UTILS_H
-#define CPPONNXRUNNER_UTILS_H
-
+#pragma once
 #include <string>
 #include <jni.h>
+#include <vector>
+#include <string>
 
-namespace utils {
-
-    // Convert jstring to std::string
-    std::string JString2String(JNIEnv *env, jstring jStr);
-
-} // utils
-
-#endif //CPPONNXRUNNER_UTILS_H
+std::vector<uint8_t> JByteArrayToVector(JNIEnv* env, jbyteArray arr);
+jbyteArray VectorToJByteArray(JNIEnv* env, const std::vector<uint8_t>& v);
+std::vector<std::string> JStringArrayToVector(JNIEnv* env, jobjectArray arr);
+std::string JString2String(JNIEnv *env, jstring jStr);
