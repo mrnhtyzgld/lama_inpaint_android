@@ -57,6 +57,11 @@ std::vector<cv::Mat> ModelSession::run(const cv::Mat &image, const cv::Mat &mask
         cv::Mat mat_image = image;
         cv::Mat mat_mask = mask;
 
+        if (mat_mask.size() != target) {
+            cv::resize(mat_mask, mat_mask, target, 0, 0, cv::INTER_NEAREST);
+        }
+        cv::threshold(mat_mask, mat_mask, 127, 255, cv::THRESH_BINARY);
+
         mat_image = cv::dnn::blobFromImage(
                 mat_image, 1.f / 255.f, target, cv::Scalar(), /*swapRB*/
                 true, /*crop*/ false, CV_32F);
