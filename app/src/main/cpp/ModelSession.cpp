@@ -1,14 +1,17 @@
 #include "ModelSession.h"
 #include "logging.h"
 
+/*
+ * https://github.com/devingarg/onnx-quantization/blob/main/resnet_inference.cpp
+ */
+
 ModelSession::ModelSession(Ort::Env &env,
                            Ort::MemoryInfo &mem_info,
                            RunnerSettings s,
                            std::string model_path)
-        : mem_info_(mem_info)
-{
+        : mem_info_(mem_info) {
     model_path_ = model_path;
-    settings_   = s;
+    settings_ = s;
 
     Ort::SessionOptions so = init_session(s);
     session_ = Ort::Session(env, model_path_.c_str(), so);
@@ -160,12 +163,87 @@ std::vector<uint8_t> ModelSession::encodeMat_(const cv::Mat &img, const std::str
 }
 
 void ModelSession::find_input_output_info_() {
-    image_width_ = 512;
-    image_height_ = 512;
-    image_idx_ = 0;
-    mask_idx_ = 1;
-    input_names_ = {"image", "mask"};
-    output_names_ = {"output"};
+    in_count = session_.GetInputCount();
+    out_count = session_.GetOutputCount();
+
+    input_shapes_.clear();
+    output_shapes_.clear();
+    input_shapes_.reserve(in_count);
+    output_shapes_.reserve(out_count);
+
+    const int64_t batchSize = 1;
+
+    for (size_t i = 0; i < in_count; ++i) {
+        std::vector<int64_t> shp = getDataShape(session_.GetInputTypeInfo(i));
+        if (!shp.empty() && shp[0] == -1) {
+            shp[0] = batchSize;
+        }
+        input_shapes_.push_back(std::move(shp));
+    }
+
+    for (size_t i = 0; i < out_count; ++i) {
+        std::vector<int64_t> shp = getDataShape(session_.GetOutputTypeInfo(i));
+        output_shapes_.push_back(std::move(shp));
+    }
+
+    input_names_ = session_.GetInputNames();
+    output_names_ = session_.GetOutputNames();
+    image_width_ = static_cast<int>(input_shapes_[0][3]);
+    image_height_ = static_cast<int>(input_shapes_[0][2]);
+
+    auto shape_to_str = [](const std::vector<int64_t> &shp) {
+        std::string s = "";
+        s.reserve(64);
+        s.push_back('[');
+        for (size_t i = 0; i < shp.size(); ++i) {
+            if (i) s.push_back(',');
+            if (shp[i] < 0) {                // dinamik boyutlar -1/-2 vs.
+                s.push_back('?');
+            } else {
+                s += std::to_string(shp[i]);
+            }
+        }
+        s.push_back(']');
+        return s;
+    };
+
+    LOGI("[MODEL] path='%s'", model_path_.c_str());
+
+    LOGI("[IO] input_count=%zu, output_count=%zu", in_count, out_count);
+    LOGI("[IO] target_image_size (assumed NCHW) -> W=%d H=%d", image_width_, image_height_);
+
+// ---- LOG: tüm inputlar ----
+    for (size_t i = 0; i < in_count; ++i) {
+        // isim
+        const char *name_c = (i < input_names_.size()) ? input_names_[i].c_str() : "<noname>";
+        // eleman tipi
+        Ort::TypeInfo tinfo = session_.GetInputTypeInfo(i);
+        auto tinf = tinfo.GetTensorTypeAndShapeInfo();
+        int etype = static_cast<int>(tinf.GetElementType());
+
+        // shape string
+        const std::string shp_str = shape_to_str(input_shapes_[i]);
+
+        LOGI("[IN  %zu] name='%s'  elem_type=%d  shape=%s",
+             i, name_c, etype, shp_str.c_str());
+    }
+
+    // ---- LOG: tüm outputlar ----
+    for (size_t i = 0; i < out_count; ++i) {
+        // isim
+        const char *name_c = (i < output_names_.size()) ? output_names_[i].c_str() : "<noname>";
+        // eleman tipi
+        Ort::TypeInfo tinfo = session_.GetOutputTypeInfo(i);
+        auto tinf = tinfo.GetTensorTypeAndShapeInfo();
+        int etype = static_cast<int>(tinf.GetElementType());
+
+        // shape string
+        const std::string shp_str = shape_to_str(output_shapes_[i]);
+
+        LOGI("[OUT %zu] name='%s'  elem_type=%d  shape=%s",
+             i, name_c, etype, shp_str.c_str());
+    }
+
 }
 
 cv::Mat ModelSession::ort_output_to_mat(const Ort::Value &out) {
@@ -224,7 +302,7 @@ Ort::SessionOptions ModelSession::init_session(RunnerSettings s) {
     if (s.use_nnapi) {
         so.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
     } else if (s.use_layout_optimization_instead_of_extended) {
-        so.SetGraphOptimizationLevel(ORT_ENABLE_LAYOUT);
+        so.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
     } else {
         so.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
     }

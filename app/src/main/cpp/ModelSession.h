@@ -17,36 +17,44 @@
 
 class ModelSession {
 public:
-    ModelSession(Ort::Env& env,
-                 Ort::MemoryInfo& mem_info,
+    ModelSession(Ort::Env &env,
+                 Ort::MemoryInfo &mem_info,
                  RunnerSettings s,
                  std::string model_path);
 
-    std::vector<uint8_t> runEndToEnd(const std::vector<uint8_t>& imageBytes,
-                                     const std::vector<uint8_t>& maskBytes);
+    std::vector<uint8_t> runEndToEnd(const std::vector<uint8_t> &imageBytes,
+                                     const std::vector<uint8_t> &maskBytes);
 
-    std::vector<cv::Mat> run(const cv::Mat& image, const cv::Mat& mask);
+    std::vector<cv::Mat> run(const cv::Mat &image, const cv::Mat &mask);
 
-    const std::string& model_path() const { return model_path_; }
+    const std::string &model_path() const { return model_path_; }
 
 private:
     // SessionOptions
     Ort::SessionOptions init_session(RunnerSettings s);
 
     // Yardımcılar (CPP'de tanımlı)
-    cv::Mat              decodeBytesToMat_(const std::vector<uint8_t>& bytes, int flags);
-    std::vector<uint8_t> encodeMat_(const cv::Mat& img, const std::string& ext);
-    void                 find_input_output_info_();
-    cv::Mat              ort_output_to_mat(const Ort::Value& out);
+    cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
+
+    std::vector<uint8_t> encodeMat_(const cv::Mat &img, const std::string &ext);
+
+    void find_input_output_info_();
+
+    cv::Mat ort_output_to_mat(const Ort::Value &out);
 
 private:
     // ORT
-    Ort::Session     session_{nullptr};
-    Ort::MemoryInfo& mem_info_;
+    Ort::Session session_{nullptr};
+    Ort::MemoryInfo &mem_info_;
 
     // Model & ayarlar
-    std::string    model_path_;
+    std::string model_path_;
     RunnerSettings settings_;
+
+    std::vector<int64_t> getDataShape(Ort::TypeInfo info);
+
+    std::vector<std::vector<int64_t>> input_shapes_, output_shapes_;
+    size_t in_count, out_count;
 
     // IO bilgileri
     int image_idx_;
