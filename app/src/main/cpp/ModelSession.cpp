@@ -246,6 +246,13 @@ void ModelSession::find_input_output_info_() {
 
 }
 
+std::vector<int64_t> getDataShape(Ort::TypeInfo info) {
+
+    auto tensorInfo = info.GetTensorTypeAndShapeInfo();
+    std::vector<int64_t> shape = tensorInfo.GetShape();
+    return shape;
+}
+
 cv::Mat ModelSession::ort_output_to_mat(const Ort::Value &out) {
     // Take shape
     auto info = out.GetTensorTypeAndShapeInfo();
