@@ -38,7 +38,9 @@ class MainActivity : AppCompatActivity() {
     private val CAMERA_PERMISSION_CODE = 8
 
     //model readiness + executor/handler
-    @Volatile private var modelReady = false
+    @Volatile
+    private var modelReady = false
+
     // simple background executor and main-thread handler
     private val bg = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -47,7 +49,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inferButton: Button
 
     // ---- single-run guard ----
-    @Volatile private var isInferencing = false
+    @Volatile
+    private var isInferencing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,15 +62,24 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // --- Copy Assets -> Cache ---
-        copyAssetToCacheDir(MODEL_ASSET_PATH, MODEL_ASSET_PATH)         // => $cacheDir/inference.onnx
-        copyAssetToCacheDir(Model_2_ASSET_PATH, Model_2_ASSET_PATH)     // => $cacheDir/inference_1.onnx
+        copyAssetToCacheDir(
+            MODEL_ASSET_PATH,
+            MODEL_ASSET_PATH
+        )         // => $cacheDir/inference.onnx
+        copyAssetToCacheDir(
+            Model_2_ASSET_PATH,
+            Model_2_ASSET_PATH
+        )     // => $cacheDir/inference_1.onnx
         copyFileOrDir("images")                                     // => $cacheDir/images/* (for sample input & mask)
 
         val copiedDir = File(cacheDir, "images")
-        Log.i("cpponnxrunner", "images dir=${copiedDir.absolutePath} list=${copiedDir.list()?.toList()}")
+        Log.i(
+            "cpponnxrunner",
+            "images dir=${copiedDir.absolutePath} list=${copiedDir.list()?.toList()}"
+        )
 
         // Create ORT session in background; measure duration; show English toasts
-        val modelPath  = File(cacheDir, MODEL_ASSET_PATH).absolutePath
+        val modelPath = File(cacheDir, MODEL_ASSET_PATH).absolutePath
         val model2Path = File(cacheDir, Model_2_ASSET_PATH).absolutePath
         mainHandler.post {
             Toast.makeText(this, "Loading model…", Toast.LENGTH_SHORT).show()
@@ -81,7 +93,11 @@ class MainActivity : AppCompatActivity() {
                 val dtSec = dtMs / 1000.0
                 mainHandler.post {
                     modelReady = true
-                    Toast.makeText(this, String.format(Locale.US, "Model loaded (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        String.format(Locale.US, "Model loaded (%.2f s)", dtSec),
+                        Toast.LENGTH_LONG
+                    ).show()
                     // enable button only after model is ready
                     if (this::inferButton.isInitialized) {
                         inferButton.isEnabled = true
@@ -90,7 +106,8 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Throwable) {
                 Log.e("cpponnxrunner", "createSession failed", e)
                 mainHandler.post {
-                    Toast.makeText(this, "Model failed to load: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "Model failed to load: ${e.message}", Toast.LENGTH_LONG)
+                        .show()
                 }
             }
         }
@@ -111,7 +128,8 @@ class MainActivity : AppCompatActivity() {
             return@OnClickListener
         }
         if (!modelReady) {
-            Toast.makeText(this, "Model is still loading. Please try again.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Model is still loading. Please try again.", Toast.LENGTH_LONG)
+                .show()
             return@OnClickListener
         }
 
@@ -120,7 +138,7 @@ class MainActivity : AppCompatActivity() {
         if (useAsset.isChecked) {
             try {
                 val imageBytes = assets.open(SAMPLE_IMAGE_ASSET).use { it.readBytes() }
-                val maskBytes  = assets.open(SAMPLE_MASK_ASSET).use { it.readBytes() }
+                val maskBytes = assets.open(SAMPLE_MASK_ASSET).use { it.readBytes() }
                 runInference(imageBytes, maskBytes, sourceLabel = "default asset")
             } catch (e: Throwable) {
                 Toast.makeText(this, "Asset read error: ${e.message}", Toast.LENGTH_LONG).show()
@@ -169,7 +187,8 @@ class MainActivity : AppCompatActivity() {
 
         // hard guard — never start inference before model is ready
         if (!modelReady) {
-            Toast.makeText(this, "Model is still loading. Please try again.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Model is still loading. Please try again.", Toast.LENGTH_LONG)
+                .show()
             return
         }
 
@@ -188,6 +207,7 @@ class MainActivity : AppCompatActivity() {
                         inp?.readBytes() ?: return
                     }
                 }
+
                 CAPTURE_IMAGE -> {
                     // Camera intent returns a thumbnail; compress to PNG and convert to bytes
                     val bmp = data?.extras?.get("data") as? Bitmap ?: return
@@ -196,6 +216,7 @@ class MainActivity : AppCompatActivity() {
                         bos.toByteArray()
                     }
                 }
+
                 else -> return
             }
 
@@ -256,14 +277,20 @@ class MainActivity : AppCompatActivity() {
                     val outBitmap = BitmapFactory.decodeByteArray(outBytes, 0, outBytes.size)
                     try {
                         binding.outputImage.setImageBitmap(outBitmap)
-                        binding.statusMessage.text = String.format(Locale.US, "Output rendered (%.2f s)", dtSec)
+                        binding.statusMessage.text =
+                            String.format(Locale.US, "Output rendered (%.2f s)", dtSec)
                     } catch (_: Throwable) {
-                        binding.statusMessage.text = String.format(Locale.US, "Output saved to: %s (%.2f s)", outPath, dtSec)
+                        binding.statusMessage.text =
+                            String.format(Locale.US, "Output saved to: %s (%.2f s)", outPath, dtSec)
                     }
                     val inBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                     binding.inputImage.setImageBitmap(inBitmap)
 
-                    Toast.makeText(this, String.format(Locale.US, "Inference finished (%.2f s)", dtSec), Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        String.format(Locale.US, "Inference finished (%.2f s)", dtSec),
+                        Toast.LENGTH_LONG
+                    ).show()
                     isInferencing = false
                     if (this::inferButton.isInitialized) {
                         inferButton.isEnabled = true
