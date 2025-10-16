@@ -33,7 +33,6 @@ private:
     // SessionOptions
     Ort::SessionOptions init_session(RunnerSettings s);
 
-    // Yardımcılar (CPP'de tanımlı)
     cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
 
     std::vector<uint8_t> encodeMat_(const cv::Mat &img, const std::string &ext);
@@ -47,20 +46,18 @@ private:
     Ort::Session session_{nullptr};
     Ort::MemoryInfo &mem_info_;
 
-    // Model & ayarlar
+    // Model & settings
     std::string model_path_;
     RunnerSettings settings_;
+
+    // IO info
+    int image_width_;
+    int image_height_;
 
     std::vector<int64_t> getDataShape(Ort::TypeInfo info);
 
     std::vector<std::vector<int64_t>> input_shapes_, output_shapes_;
     size_t in_count, out_count;
-
-    // IO bilgileri
-    int image_idx_;
-    int mask_idx_;
-    int image_width_;
-    int image_height_;
     std::vector<std::string> input_names_;
     std::vector<std::string> output_names_;
 };

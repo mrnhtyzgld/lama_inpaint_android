@@ -4,7 +4,7 @@
 // TODO save optimized graph for fast load?
 
 InferenceRunner::InferenceRunner()
-        : env_(ORT_LOGGING_LEVEL_WARNING, "cpponnxrunner") {
+        : env_(ORT_LOGGING_LEVEL_VERBOSE, "cpponnxrunner") {
     start_environment_();
 }
 

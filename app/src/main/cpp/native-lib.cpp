@@ -35,7 +35,7 @@ Java_com_example_cpponnxrunner_MainActivity_createSession(JNIEnv *env, jobject t
     s.num_cpu_cores = 4;
     s.use_xnnpack = false;
     s.use_nnapi = false;
-    s.use_layout_optimization_instead_of_extended = true;
+    s.use_layout_optimization_instead_of_extended = false;
 
     auto models = g_runner.init_models(paths, s);
 

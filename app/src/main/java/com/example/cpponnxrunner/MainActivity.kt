@@ -25,9 +25,12 @@ import java.util.concurrent.Executors
 
 
 class MainActivity : AppCompatActivity() {
+    private val a = "inpainting_lama_opencv.onnx"
+    //private val a = "lama_fp32_512.onnx"
 
-    private val MODEL_ASSET_PATH = "lama_fp32.onnx"
-    private val Model_2_ASSET_PATH = "lama_fp32_2.onnx"
+    private val MODEL_ASSET_PATH = a
+
+    private val Model_2_ASSET_PATH = a
     private val SAMPLE_IMAGE_ASSET = "images/input_image.jpg"
     private val SAMPLE_MASK_ASSET = "images/dilated_mask.png"
     private val OUTPUT_IMAGE_PATH = "output/output_image.png"

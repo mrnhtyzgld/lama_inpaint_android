@@ -246,7 +246,7 @@ void ModelSession::find_input_output_info_() {
 
 }
 
-std::vector<int64_t> getDataShape(Ort::TypeInfo info) {
+std::vector<int64_t> ModelSession::getDataShape(Ort::TypeInfo info) {
 
     auto tensorInfo = info.GetTensorTypeAndShapeInfo();
     std::vector<int64_t> shape = tensorInfo.GetShape();
