@@ -7,40 +7,24 @@
 
 #include "utils.h"
 #include "onnxruntime_cxx_api.h"
-#include "InferenceRunner.h"
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/dnn.hpp>
 #include <jni.h>
 #include <string>
-
+#include "logging.h"
 #include "onnxruntime_cxx_api.h"
-
-#include "InferenceRunner.h"
 #include "ModelSession.h"
 #include <chrono>
 
-
 // -------------------- Global --------------------
-static InferenceRunner g_runner; // tek Env + MemInfo
-static std::shared_ptr<ModelSession> g_modelA;
-static std::shared_ptr<ModelSession> g_modelB;
+static std::shared_ptr<ModelSession> model;
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_cpponnxrunner_MainActivity_createSession(JNIEnv *env, jobject thiz,
                                                           jobjectArray modelPaths) {
     auto paths = JStringArrayToVector(env, modelPaths);
-
-    RunnerSettings s{};
-    s.num_cpu_cores = 4;
-    s.use_xnnpack = false;
-    s.use_nnapi = false;
-    s.use_layout_optimization_instead_of_extended = false;
-
-    auto models = g_runner.init_models(paths, s);
-
-    g_modelA = models[0];
-    g_modelB = models[1];
+    auto model = ModelSession(paths[0]);
 
 }
 
@@ -61,8 +45,6 @@ JNIEXPORT jbyteArray JNICALL
 Java_com_example_cpponnxrunner_MainActivity_inferFromBytesParallel(JNIEnv *env, jobject thiz,
                                                                    jbyteArray image_bytes,
                                                                    jbyteArray mask_bytes) {
-    if (!g_modelA || !g_modelB) return nullptr;
-
     // Decode
     std::vector<uint8_t> imgV = JByteArrayToVector(env, image_bytes);
     std::vector<uint8_t> maskV = JByteArrayToVector(env, mask_bytes);
@@ -93,7 +75,7 @@ Java_com_example_cpponnxrunner_MainActivity_inferFromBytesParallel(JNIEnv *env, 
         auto t0 = clock::now();
         __android_log_print(ANDROID_LOG_INFO, "cpponnxrunner", "T1 start (modelA)");
         try {
-            pngBytes_1 = g_modelA->runEndToEnd(imgV, maskV);
+            pngBytes_1 = model->runEndToEnd(imgV, maskV);
         } catch (...) {
             ex1 = std::current_exception();
         }
@@ -113,7 +95,7 @@ Java_com_example_cpponnxrunner_MainActivity_inferFromBytesParallel(JNIEnv *env, 
         auto t0 = clock::now();
         __android_log_print(ANDROID_LOG_INFO, "cpponnxrunner", "T2 start (modelB)");
         try {
-            pngBytes_2 = g_modelB->runEndToEnd(imgV, maskV);
+            pngBytes_2 = model->runEndToEnd(imgV, maskV);
         } catch (...) {
             ex2 = std::current_exception();
         }
@@ -180,10 +162,8 @@ Java_com_example_cpponnxrunner_MainActivity_inferFromBytes(JNIEnv *env, jobject 
     std::vector<uint8_t> maskV = JByteArrayToVector(env, mask_bytes);
 
     std::vector<uint8_t> pngBytes_1;
-    //std::vector<uint8_t> pngBytes_2;
     try {
-        pngBytes_1 = g_modelA->runEndToEnd(imgV, maskV);
-        //pngBytes_2 = g_modelB->runEndToEnd(imgV,maskV);
+        pngBytes_1 = model->runEndToEnd(imgV, maskV);
     } catch (...) {
         return nullptr;
     }

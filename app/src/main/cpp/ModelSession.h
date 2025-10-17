@@ -5,22 +5,13 @@
 #include <stdexcept>
 #include <memory>
 
-#include <onnxruntime_cxx_api.h>
-#include <onnxruntime_c_api.h>
-#include <onnxruntime_session_options_config_keys.h>
-#include <nnapi_provider_factory.h>
-
 #include <opencv2/core.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
-#include "config.h"
 
 class ModelSession {
 public:
-    ModelSession(Ort::Env &env,
-                 Ort::MemoryInfo &mem_info,
-                 RunnerSettings s,
-                 std::string model_path);
+    ModelSession(std::string model_path);
 
     std::vector<uint8_t> runEndToEnd(const std::vector<uint8_t> &imageBytes,
                                      const std::vector<uint8_t> &maskBytes);
@@ -30,31 +21,18 @@ public:
     const std::string &model_path() const { return model_path_; }
 
 private:
-    // SessionOptions
-    Ort::SessionOptions init_session(RunnerSettings s);
-
     cv::Mat decodeBytesToMat_(const std::vector<uint8_t> &bytes, int flags);
 
     std::vector<uint8_t> encodeMat_(const cv::Mat &img, const std::string &ext);
 
-    void find_input_output_info_();
-
-    cv::Mat ort_output_to_mat(const Ort::Value &out);
-
-private:
-    // ORT
-    Ort::Session session_{nullptr};
-    Ort::MemoryInfo &mem_info_;
+    cv::dnn::Net net;
 
     // Model & settings
     std::string model_path_;
-    RunnerSettings settings_;
 
     // IO info
     int image_width_;
     int image_height_;
-
-    std::vector<int64_t> getDataShape(Ort::TypeInfo info);
 
     std::vector<std::vector<int64_t>> input_shapes_, output_shapes_;
     size_t in_count, out_count;
