@@ -12,7 +12,8 @@ cmake_minimum_required(VERSION 3.22.1)
 project("cpponnxrunner")
 
 
-set(OpenCV_DIR "C:/noWhiteSpace/packages/OpenCV-android-sdk/sdk/native/jni")
+# set(OpenCV_DIR "C:/noWhiteSpace/packages/OpenCV-android-sdk/sdk/native/jni")
+set(OpenCV_DIR "C:/Users/Nihat Emre/Downloads/OpenCV-android-sdk/sdk/native/jni")
 find_package(OpenCV REQUIRED)
 
 # Creates and names a library, sets it as either STATIC
